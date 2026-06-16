@@ -576,9 +576,7 @@ kflow_compact_outputs <- function(out_dir, keep = c("model_payload.rds", "model-
   rel <- substring(normalizePath(files, winslash = "/", mustWork = FALSE), nchar(out_root) + 2L)
   rel <- gsub("\\\\", "/", rel)
   keep <- gsub("\\\\", "/", keep)
-  keep_paths <- keep[grepl("/", keep, fixed = TRUE)]
-  keep_names <- keep[!grepl("/", keep, fixed = TRUE)]
-  keep_file <- rel %in% keep_paths | basename(files) %in% keep_names
+  keep_file <- rel %in% keep
   remove <- files[!keep_file]
   if (length(remove)) {
     unlink(remove, force = TRUE)
