@@ -4,9 +4,15 @@
 */work/
 .kflow-local/
 KflowOutput/
+plan-output/
 .Rhistory
 .RData
 .Rproj.user/
 *.log
-!mfcl/inputs/
-!mfcl/inputs/**
+mfcl/
+.quarto/
+_freeze/
+_site/
+*_files/
+*.html
+*.pdf

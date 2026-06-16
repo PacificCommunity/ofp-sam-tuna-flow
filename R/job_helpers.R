@@ -85,16 +85,20 @@ kflow_run_shell <- function(command, workdir = getwd(), log_file = NULL, sanitiz
 }
 
 kflow_clone_source <- function(work_dir = "work/source", log_file = NULL) {
-  source_repo <- kflow_env("SOURCE_REPO", kflow_env("FLOW_SOURCE_REPO", "flow_checkout"))
-  source_ref <- kflow_env("SOURCE_REF", "main")
+  source_repo <- kflow_env("SOURCE_REPO", kflow_env("FLOW_SOURCE_REPO", "PacificCommunity/ofp-sam-bet2026-inputs"))
+  source_ref <- kflow_env("SOURCE_REF", kflow_env("FLOW_SOURCE_REF", "main"))
   source_url <- sprintf("https://github.com/%s.git", source_repo)
   unlink(work_dir, recursive = TRUE, force = TRUE)
   dir.create(dirname(work_dir), recursive = TRUE, showWarnings = FALSE)
 
-  clone_branch <- sprintf(
-    "git clone --depth 1 --branch %s %s %s",
-    shQuote(source_ref), shQuote(source_url), shQuote(work_dir)
-  )
+  clone_branch <- if (nzchar(source_ref)) {
+    sprintf(
+      "git clone --depth 1 --branch %s %s %s",
+      shQuote(source_ref), shQuote(source_url), shQuote(work_dir)
+    )
+  } else {
+    sprintf("git clone --depth 1 %s %s", shQuote(source_url), shQuote(work_dir))
+  }
   ok <- tryCatch({
     kflow_run_shell(clone_branch, log_file = log_file)
     TRUE
@@ -109,10 +113,25 @@ kflow_clone_source <- function(work_dir = "work/source", log_file = NULL) {
       sprintf("git clone --depth 1 %s %s", shQuote(source_url), shQuote(work_dir)),
       log_file = log_file
     )
-    kflow_run_shell(sprintf("git fetch --depth 1 origin %s || true", shQuote(source_ref)), workdir = work_dir, log_file = log_file)
-    kflow_run_shell(sprintf("git checkout %s", shQuote(source_ref)), workdir = work_dir, log_file = log_file)
+    if (nzchar(source_ref)) {
+      kflow_run_shell(sprintf("git fetch --depth 1 origin %s || true", shQuote(source_ref)), workdir = work_dir, log_file = log_file)
+      kflow_run_shell(sprintf("git checkout %s", shQuote(source_ref)), workdir = work_dir, log_file = log_file)
+    }
   }
 
+  normalizePath(work_dir, winslash = "/", mustWork = TRUE)
+}
+
+kflow_prepare_source_path <- function(source_path, work_dir = "work/source", log_file = NULL) {
+  source_path <- normalizePath(source_path, winslash = "/", mustWork = TRUE)
+  unlink(work_dir, recursive = TRUE, force = TRUE)
+  dir.create(dirname(work_dir), recursive = TRUE, showWarnings = FALSE)
+  kflow_copy_tree(source_path, work_dir)
+  exe_files <- list.files(file.path(work_dir, "mfcl", "exe"), pattern = "^mfcl", full.names = TRUE)
+  if (length(exe_files)) {
+    Sys.chmod(exe_files, mode = "0755", use_umask = FALSE)
+  }
+  kflow_note("Prepared source from local SOURCE_PATH: ", source_path, log_file = log_file)
   normalizePath(work_dir, winslash = "/", mustWork = TRUE)
 }
 
@@ -165,14 +184,17 @@ kflow_prepare_flow_source <- function(work_dir = "work/source", log_file = NULL)
 }
 
 kflow_use_flow_source <- function() {
-  source_repo <- tolower(kflow_env("SOURCE_REPO", kflow_env("FLOW_SOURCE_REPO", "flow_checkout")))
+  source_repo <- tolower(kflow_env("SOURCE_REPO", kflow_env("FLOW_SOURCE_REPO", "PacificCommunity/ofp-sam-bet2026-inputs")))
   kflow_bool("USE_FLOW_SOURCE", FALSE) ||
   kflow_bool("USE_LOCAL_SOURCE", FALSE) ||
     source_repo %in% c("flow_checkout", "local", ".", "flow", "this")
 }
 
 kflow_checkout_source <- function(work_dir = "work/source", log_file = NULL) {
-  if (kflow_use_flow_source()) {
+  source_path <- kflow_env("SOURCE_PATH", kflow_env("FLOW_SOURCE_PATH", ""))
+  if (nzchar(source_path)) {
+    kflow_prepare_source_path(source_path, work_dir, log_file = log_file)
+  } else if (kflow_use_flow_source()) {
     kflow_prepare_flow_source(work_dir, log_file = log_file)
   } else {
     kflow_clone_source(work_dir, log_file = log_file)
@@ -260,13 +282,13 @@ kflow_sync_input_artifacts <- function(input_dir, source_dir, artifact_dir_name 
 
 kflow_copy_seed_files <- function(input_dir, source_dir, pattern, copy_to, log_file = NULL) {
   if (!nzchar(pattern) || !nzchar(copy_to) || !dir.exists(input_dir)) {
-    return(character())
+    return(invisible(character()))
   }
   all_files <- list.files(input_dir, recursive = TRUE, full.names = TRUE, all.files = TRUE, no.. = TRUE)
   hits <- all_files[grepl(pattern, all_files)]
   if (!length(hits)) {
     kflow_note("No upstream seed files matched pattern: ", pattern, log_file = log_file)
-    return(character())
+    return(invisible(character()))
   }
   dest_dir <- file.path(source_dir, copy_to)
   dir.create(dest_dir, recursive = TRUE, showWarnings = FALSE)
@@ -277,7 +299,7 @@ kflow_copy_seed_files <- function(input_dir, source_dir, pattern, copy_to, log_f
 
 kflow_set_common_make_env <- function() {
   values <- c(
-    program_path = kflow_env("PROGRAM_PATH", kflow_env("FLOW_MFCL_PROGRAM", "mfcl/exe/mfclo64_2026")),
+    program_path = kflow_env("PROGRAM_PATH", kflow_env("FLOW_MFCL_PROGRAM", "/home/mfcl/mfclo64")),
     base_dir = kflow_env("BASE_DIR", ""),
     model_dir = kflow_env("MODEL_DIR", ""),
     hessian_part = kflow_env("HESSIAN_PART", "1"),
@@ -331,7 +353,7 @@ kflow_run_make_targets <- function(source_dir, targets, log_file = NULL) {
 }
 
 kflow_mfcl_program <- function(source_dir) {
-  program <- kflow_env("PROGRAM_PATH", kflow_env("FLOW_MFCL_PROGRAM", "mfcl/exe/mfclo64_2026_02_04_vsn2278"))
+  program <- kflow_env("PROGRAM_PATH", kflow_env("FLOW_MFCL_PROGRAM", "/home/mfcl/mfclo64"))
   program <- if (grepl("^/", program)) program else file.path(source_dir, program)
   if (!file.exists(program)) {
     exe_dir <- file.path(source_dir, "mfcl", "exe")
@@ -378,6 +400,38 @@ kflow_write_smoke_depletion <- function(target_dir, stage) {
   invisible(grid)
 }
 
+kflow_mfcl_log_summary <- function(log_file, out_dir, model_dir) {
+  lines <- if (!is.null(log_file) && file.exists(log_file)) {
+    readLines(log_file, warn = FALSE)
+  } else {
+    character()
+  }
+  error_hits <- grep("\\b(ERROR|Error)\\b", lines, value = TRUE)
+  warning_hits <- grep("\\b(WARNING|Warning)\\b", lines, value = TRUE)
+  summary <- data.frame(
+    log_file = if (!is.null(log_file)) log_file else "",
+    error_count = length(error_hits),
+    warning_count = length(warning_hits),
+    fail_on_log_error = kflow_bool("MFCL_SMOKE_FAIL_ON_LOG_ERROR", FALSE),
+    stringsAsFactors = FALSE
+  )
+  utils::write.csv(summary, file.path(out_dir, "mfcl-log-summary.csv"), row.names = FALSE)
+  utils::write.csv(summary, file.path(model_dir, "mfcl-log-summary.csv"), row.names = FALSE)
+  if (length(error_hits)) {
+    writeLines(utils::head(error_hits, 30), file.path(out_dir, "mfcl-log-errors.txt"))
+    writeLines(utils::head(error_hits, 30), file.path(model_dir, "mfcl-log-errors.txt"))
+    kflow_note(
+      "MFCL log contains ", length(error_hits),
+      " error-looking line(s). See mfcl-log-summary.csv and mfcl-log-errors.txt.",
+      log_file = log_file
+    )
+    if (kflow_bool("MFCL_SMOKE_FAIL_ON_LOG_ERROR", FALSE)) {
+      stop("MFCL smoke log contains error-looking lines and MFCL_SMOKE_FAIL_ON_LOG_ERROR=1.", call. = FALSE)
+    }
+  }
+  summary
+}
+
 kflow_run_mfcl_smoke <- function(source_dir, out_dir, stage, log_file = NULL) {
   base_dir <- file.path(source_dir, kflow_env("BASE_DIR", kflow_env("FLOW_BASE_INPUT_DIR", "mfcl/inputs/2023_4region")))
   model_dir <- file.path(source_dir, kflow_env("MODEL_DIR", file.path("model", kflow_env("JOB_KEY", "smoke"))))
@@ -387,8 +441,28 @@ kflow_run_mfcl_smoke <- function(source_dir, out_dir, stage, log_file = NULL) {
 
   kflow_copy_tree(base_dir, model_dir)
   program <- kflow_mfcl_program(source_dir)
-  frq <- kflow_env("MFCL_FRQ", "bet.frq")
-  ini <- kflow_env("MFCL_INI", "bet.ini")
+  frq <- kflow_env("MFCL_FRQ", "")
+  ini <- kflow_env("MFCL_INI", "")
+  if (!nzchar(frq)) {
+    frq_candidates <- list.files(model_dir, pattern = "\\.frq$", full.names = FALSE, ignore.case = TRUE)
+    if (!length(frq_candidates)) {
+      stop("No .frq file found in ", model_dir, call. = FALSE)
+    }
+    if (length(frq_candidates) > 1L) {
+      kflow_note("Multiple .frq files found; using first: ", frq_candidates[[1]], log_file = log_file)
+    }
+    frq <- frq_candidates[[1]]
+  }
+  if (!nzchar(ini)) {
+    ini_candidates <- list.files(model_dir, pattern = "\\.ini$", full.names = FALSE, ignore.case = TRUE)
+    if (!length(ini_candidates)) {
+      stop("No .ini file found in ", model_dir, call. = FALSE)
+    }
+    if (length(ini_candidates) > 1L) {
+      kflow_note("Multiple .ini files found; using first: ", ini_candidates[[1]], log_file = log_file)
+    }
+    ini <- ini_candidates[[1]]
+  }
   par <- kflow_env("SMOKE_PAR", "00.par")
   command <- paste(
     shQuote(program),
@@ -404,6 +478,7 @@ kflow_run_mfcl_smoke <- function(source_dir, out_dir, stage, log_file = NULL) {
   if (!file.exists(output_par)) {
     stop(sprintf("MFCL smoke run did not create %s", output_par), call. = FALSE)
   }
+  log_summary <- kflow_mfcl_log_summary(log_file, out_dir, model_dir)
   smoke <- data.frame(
     stage = stage,
     run_label = kflow_env("RUN_LABEL", ""),
@@ -418,6 +493,8 @@ kflow_run_mfcl_smoke <- function(source_dir, out_dir, stage, log_file = NULL) {
     ini = ini,
     par = par,
     par_size = file.info(output_par)$size,
+    mfcl_log_error_count = log_summary$error_count[[1]],
+    mfcl_log_warning_count = log_summary$warning_count[[1]],
     stringsAsFactors = FALSE
   )
   utils::write.csv(smoke, file.path(model_dir, "mfcl-smoke-summary.csv"), row.names = FALSE)
@@ -622,9 +699,10 @@ kflow_registry_values <- function(stage, extra = list()) {
     flow_species_label = kflow_env("FLOW_SPECIES_LABEL", ""),
     flow_assessment_year = kflow_env("FLOW_ASSESSMENT_YEAR", ""),
     flow_task_prefix = kflow_env("FLOW_TASK_PREFIX", ""),
-    program_path = kflow_env("PROGRAM_PATH", kflow_env("FLOW_MFCL_PROGRAM", "mfcl/exe/mfclo64_2026_02_04_vsn2278")),
-    source_repo = kflow_env("SOURCE_REPO", "flow_checkout"),
+    program_path = kflow_env("PROGRAM_PATH", kflow_env("FLOW_MFCL_PROGRAM", "/home/mfcl/mfclo64")),
+    source_repo = kflow_env("SOURCE_REPO", "PacificCommunity/ofp-sam-bet2026-inputs"),
     source_ref = kflow_env("SOURCE_REF", ""),
+    source_path = kflow_env("SOURCE_PATH", ""),
     use_flow_source = kflow_env("USE_FLOW_SOURCE", ""),
     use_local_source = kflow_env("USE_LOCAL_SOURCE", ""),
     flow_group = kflow_env("FLOW_GROUP", ""),
@@ -657,8 +735,9 @@ kflow_write_summary <- function(out_dir, stage, extra = list()) {
       flow_species_label = kflow_env("FLOW_SPECIES_LABEL", ""),
       flow_assessment_year = kflow_env("FLOW_ASSESSMENT_YEAR", ""),
       flow_task_prefix = kflow_env("FLOW_TASK_PREFIX", ""),
-      source_repo = kflow_env("SOURCE_REPO", "flow_checkout"),
+      source_repo = kflow_env("SOURCE_REPO", "PacificCommunity/ofp-sam-bet2026-inputs"),
       source_ref = kflow_env("SOURCE_REF", ""),
+      source_path = kflow_env("SOURCE_PATH", ""),
       use_flow_source = kflow_env("USE_FLOW_SOURCE", ""),
       use_local_source = kflow_env("USE_LOCAL_SOURCE", ""),
       backend = kflow_env("MFCL_BACKEND", "mfcl_exe"),

@@ -1,0 +1,179 @@
+---
+bibliography: ../bet-2026.bib
+---
+
+# Methods
+
+## Data and Study Area
+
+## Likelihood Profile Conflict Diagnostics
+
+Likelihood profile diagnostics were used to evaluate whether different data components favoured different biomass levels. The analysis was applied to one-dimensional biomass scalar profiles. Let $x$ denote the profiled scalar, let $L_T(x)$ denote the total negative log-likelihood at scalar value $x$, and let $L_j(x)$ denote the contribution from component or line $j$, such as an aggregate likelihood component, fishery-specific length-frequency term, weight-frequency term, tagging term, or index term. Profile differences were calculated after centring each curve at its own minimum:
+
+$$
+D_T(x) = L_T(x) - \min_{x} L_T(x),
+\qquad
+D_j(x) = L_j(x) - \min_{x} L_j(x).
+$$
+
+The approximate 95% one-parameter profile-likelihood cutoff was set to
+
+$$
+c_{0.95} = \frac{1}{2}\chi^2_{1,0.95} \approx 1.92,
+$$
+
+which is appropriate when changes are expressed on the negative log-likelihood scale. The total profile minimum is denoted by
+
+$$
+\hat{x}_T = \arg\min_{x} D_T(x),
+$$
+
+and the component-specific profile minimum by
+
+$$
+\hat{x}_j = \arg\min_{x} D_j(x).
+$$
+
+### Total Profile Quality Control
+
+Conflict metrics were interpreted only when the total profile had an interpretable shape. Total profile quality control was based on the shape of $D_T(x)$, because a poor total profile undermines the interpretation of all component conflicts. The total profile was classified as either `Good` or `Bad`.
+
+A profile was flagged as `Bad` and excluded from the overall ranking and decision-tree screens when any of the following occurred:
+
+- fewer than four finite profile points were available;
+- the total profile minimum was at either endpoint of the profiled range;
+- the total profile was nearly flat, defined as $\max(D_T) - \min(D_T) < 0.5$;
+- $\max(D_T) - \min(D_T) < 1.92$;
+- the approximate 95% profile interval was not closed within the scanned scalar range;
+- fewer than two profile points were available on either side of $\hat{x}_T$;
+- the total profile showed material departures from a U-shape according to the shape-defect metric defined below.
+
+The U-shape diagnostic was calculated from scalar values sorted in increasing order. Let $\Delta_i = D_T(x_{i+1}) - D_T(x_i)$, and let $m$ index the minimum. For an ideal U-shaped profile, increments to the left of the minimum should be non-positive as $x$ approaches the minimum, and increments to the right should be non-negative as $x$ moves away from the minimum. The shape defect was defined as
+
+$$
+S_T =
+\frac{
+\sum_{i < m}\max(\Delta_i, 0) +
+\sum_{i \ge m}\max(-\Delta_i, 0)
+}{
+\sum_i |\Delta_i|
+}.
+$$
+
+Values near zero indicate a clean U-shaped profile, whereas larger values indicate profile roughness or multiple competing minima. Profiles with $S_T > 0.30$ were flagged as `Bad`. Profiles passing all QC checks were classified as `Good`.
+
+### Component-Level Conflict Metrics
+
+The primary component-level conflict metric was the component likelihood penalty at the total optimum:
+
+$$
+p_j = D_j(\hat{x}_T).
+$$
+
+This quantity measures how much component $j$ is penalized when the model is evaluated at the biomass level preferred by the total likelihood. A component was considered to be in statistical conflict with the total optimum when
+
+$$
+p_j \ge c_{0.95}.
+$$
+
+The excess conflict for component $j$ was then defined as
+
+$$
+e_j = \max(0, p_j - c_{0.95}).
+$$
+
+This definition uses only conflict beyond the approximate 95% profile cutoff, avoiding over-interpretation of small likelihood differences. Lines with $p_j \ge c_{0.95}$ were counted as conflict lines; the excess burden $e_j$ is zero at the cutoff and increases only beyond it. Component direction was defined by comparing the component-specific optimum to the total optimum:
+
+$$
+\text{direction}_j =
+\begin{cases}
+\text{lower biomass}, & \hat{x}_j < \hat{x}_T,\\
+\text{higher biomass}, & \hat{x}_j > \hat{x}_T,\\
+\text{aligned}, & \hat{x}_j = \hat{x}_T.
+\end{cases}
+$$
+
+When the total 95% profile interval was closed, directional distance was scaled by the appropriate side of the total interval. If $x_L$ and $x_U$ are the lower and upper bounds of $\{x: D_T(x) \le c_{0.95}\}$, then
+
+$$
+d_j =
+\begin{cases}
+(\hat{x}_T - \hat{x}_j) / (\hat{x}_T - x_L), & \hat{x}_j < \hat{x}_T,\\
+(\hat{x}_j - \hat{x}_T) / (x_U - \hat{x}_T), & \hat{x}_j > \hat{x}_T,\\
+0, & \hat{x}_j = \hat{x}_T.
+\end{cases}
+$$
+
+Thus, $d_j = 1$ corresponds approximately to a component optimum located one total-profile 95% interval half-width away from the total optimum.
+
+Distance alone was not used as the primary conflict score, because a component may have a distant preferred scalar while contributing little to the total likelihood at $\hat{x}_T$. The influence weight of component $j$ at the total optimum was therefore defined as
+
+$$
+w_j =
+\begin{cases}
+|p_j| / \sum_{\ell=1}^{J} |p_\ell|, & \sum_{\ell=1}^{J} |p_\ell| > 0,\\
+0, & \sum_{\ell=1}^{J} |p_\ell| = 0,
+\end{cases}
+$$
+
+where $J$ is the number of valid non-total likelihood lines. This gives greatest weight to components that account for a large share of the likelihood penalty at the total optimum. The influence-weighted component conflict was defined as
+
+$$
+\mathrm{IWC}_j = w_j e_j (1 + d_j),
+$$
+
+and the influence-weighted distance was defined as
+
+$$
+\mathrm{IWD}_j = w_j d_j.
+$$
+
+The factor $1+d_j$ keeps the score in likelihood-conflict units while increasing the score when an influential component is also far from the total optimum on the total-profile confidence scale.
+
+### Model-Level Conflict Ranking
+
+Model-level rankings were based on conflict against the total profile optimum. The primary ranking metric was the Influence-Weighted Conflict Burden Index (IWCBI):
+
+$$
+\mathrm{IWCBI} = \sum_{j=1}^{J} \mathrm{IWC}_j.
+$$
+
+Operationally, IWCBI was calculated in four steps for each model. First, each component profile was evaluated at the total-profile optimum $\hat{x}_T$ to obtain $p_j = D_j(\hat{x}_T)$. Second, only the amount of conflict above the 95% cutoff was retained through $e_j = \max(0, p_j - 1.92)$. Third, each component was weighted by its relative contribution to the total penalty at $\hat{x}_T$, $w_j = |p_j| / \sum_\ell |p_\ell|$, so that the weights summed to one within a model. Fourth, the excess conflict was multiplied by $1+d_j$, where $d_j$ is the distance between the component and total optima measured in total-profile confidence-interval widths. The resulting $\mathrm{IWC}_j = w_j e_j(1+d_j)$ values were summed to give IWCBI.
+
+Because the weights $w_j$ sum to one when the total penalty is non-zero, IWCBI remains comparable when the number of likelihood lines changes. A model with more likelihood lines is therefore not automatically penalized by having more lines; high IWCBI requires influential lines to have excess conflict and to be displaced from the total optimum.
+
+Line-count comparability was also reported explicitly using conflict prevalence:
+
+$$
+\mathrm{CP} = \frac{1}{J}\sum_{j=1}^J I(p_j \ge c_{0.95}),
+$$
+
+where CP is the proportion of non-total likelihood lines that reached or exceeded the 95% cutoff at the total optimum. The model-summary table therefore reports the total number of lines $J$, the number of conflict lines $\sum_j I(p_j \ge c_{0.95})$, CP, and IWCBI.
+
+The overall ranking was assigned only to models with `Good` total profiles. Models with `Bad` total profile quality were retained in diagnostic tables but excluded from the rank and from the decision-tree screens. When Hessian diagnostic information was available, only models passing the Hessian screen were treated as rankable; when Hessian information was absent, this screen was ignored rather than penalizing the model.
+
+Among rankable models, ordering was deliberately simple:
+
+1. pass total-profile QC and, when available, Hessian QC;
+2. lower IWCBI.
+
+No other conflict metric was used as a ranking tie-breaker.
+
+### Model-Change Diagnostics
+
+To summarize which modelling changes tended to reduce conflict, model-input generation scripts wrote explicit change-token metadata to each input folder. These tokens were stored with the fitted model outputs and used for change diagnostics independently of the model name. For older model outputs without input-change metadata, scenario-name parsing was used only when explicitly requested. For example, an input folder created by the selectivity-node and index-CV sensitivity scripts would carry the tokens `sel4` and `cvH` even if the final model name did not contain those strings.
+
+The yes/no diagnostic compared rankable model-summary rows with and without each token. Let $Y_i$ be the IWCBI value for rankable model-summary row $i$, and let $z_{it}$ be an indicator for whether row $i$ contains token $t$. The token contrast was
+
+$$
+\Delta_t =
+\overline{Y}_{z_t = 1} - \overline{Y}_{z_t = 0}.
+$$
+
+Negative values indicate that rows containing token $t$ had lower average conflict. This contrast is descriptive rather than causal, because multiple modelling choices can change simultaneously across scenarios.
+
+A classification-tree visualization was also fitted to provide a more interpretable yes/no decision diagram. Rankable model-summary rows were labelled as `LOW` conflict when their IWCBI was less than or equal to the median IWCBI among rankable rows, and `HIGH` conflict otherwise. A shallow classification tree was then fitted using the same token indicators $z_t$. Each node reports the predicted class, the estimated probabilities of `LOW` and `HIGH`, and the fraction of model-summary rows reaching that node. This visualization is intended to communicate the dominant token splits associated with lower conflict; it is not used to assign the overall model ranking.
+
+Because the classification tree discretizes IWCBI, a companion regression-tree visualization was fitted with continuous IWCBI as the response. This tree uses the same token indicators but reports the mean IWCBI at each node, allowing additional splits within already-low or already-high conflict groups when they explain remaining variation in conflict magnitude. Only rankable rows are included in the tree. Terminal nodes list the overall ranks of the models reaching that node, and the terminal node with the lowest mean IWCBI is highlighted.
+
+These diagnostics are intended as comparative model diagnostics rather than formal independent hypothesis tests for individual data components, because component likelihood terms are not necessarily statistically independent. They provide a structured way to identify models in which the total likelihood optimum is strongly opposed by particular data components, and to distinguish broad conflict from conflict concentrated in a small number of data sources.

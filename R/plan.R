@@ -30,6 +30,9 @@ plan_flow_title <- function(default = "Tuna model exploration") {
 }
 
 assert_plan_table <- function(x, label) {
+  if (!nrow(x)) {
+    return(invisible(TRUE))
+  }
   missing <- setdiff(required_plan_columns, names(x))
   if (length(missing)) {
     stop(sprintf("%s is missing required columns: %s", label, paste(missing, collapse = ", ")), call. = FALSE)
@@ -39,6 +42,10 @@ assert_plan_table <- function(x, label) {
     stop(sprintf("%s has duplicate JOB_KEY values: %s", label, paste(unique(duplicates), collapse = ", ")), call. = FALSE)
   }
   invisible(TRUE)
+}
+
+plan_has_columns <- function(x, columns) {
+  all(columns %in% names(x))
 }
 
 plan_bind_rows <- function(...) {
@@ -180,6 +187,49 @@ expand_sensitivities <- function(bases, sensitivities) {
   plan_bind_rows(rows)
 }
 
+normalize_sensitivity_recipes <- function(sensitivities) {
+  sensitivities <- as.data.frame(sensitivities, stringsAsFactors = FALSE)
+  if (!nrow(sensitivities)) {
+    return(sensitivities)
+  }
+  if (!"CHANGE_TOKEN" %in% names(sensitivities) && "RECIPE_TOKEN" %in% names(sensitivities)) {
+    sensitivities$CHANGE_TOKEN <- sensitivities$RECIPE_TOKEN
+  }
+  if (!"CHANGE_GROUP" %in% names(sensitivities) && "RECIPE_FAMILY" %in% names(sensitivities)) {
+    sensitivities$CHANGE_GROUP <- sensitivities$RECIPE_FAMILY
+  }
+  if (!"CHANGE_SUMMARY" %in% names(sensitivities)) {
+    if ("CHANGE_DETAIL" %in% names(sensitivities)) {
+      sensitivities$CHANGE_SUMMARY <- sensitivities$CHANGE_DETAIL
+    } else if ("RECIPE_LABEL" %in% names(sensitivities)) {
+      sensitivities$CHANGE_SUMMARY <- sensitivities$RECIPE_LABEL
+    }
+  }
+  if (!"MODEL_NAME" %in% names(sensitivities)) {
+    if ("RECIPE_LABEL" %in% names(sensitivities)) {
+      sensitivities$MODEL_NAME <- sensitivities$RECIPE_LABEL
+    } else {
+      sensitivities$MODEL_NAME <- sensitivities$CHANGE_TOKEN
+    }
+  }
+  missing <- setdiff(c("CHANGE_TOKEN", "CHANGE_GROUP", "CHANGE_SUMMARY", "MODEL_NAME"), names(sensitivities))
+  if (length(missing)) {
+    stop(
+      "sensitivity recipes are missing required columns: ",
+      paste(missing, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  sensitivities
+}
+
+plan_uses_workflow_recipe_builders <- function(sensitivities, diagnostics) {
+  exists("build_sensitivity_rows", inherits = TRUE) &&
+    exists("build_diagnostics_rows", inherits = TRUE) &&
+    (any(c("RECIPE_TOKEN", "RECIPE_KEY") %in% names(sensitivities)) ||
+      any(c("RECIPE_TOKEN", "RECIPE_KEY") %in% names(diagnostics)))
+}
+
 expand_diagnostics <- function(model_rows, diagnostics) {
   # Create diagnostics from base rows, sensitivity rows, or both.
   # Each row points back to its parent through INPUT_TASK and INPUT_KEY.
@@ -308,17 +358,56 @@ expand_reports <- function(plots, reports) {
 
 build_exploration_plan <- function(bases,
                                    sensitivities,
-                                   diagnostics = diagnostic_recipes(),
-                                   plots = plot_recipes(),
-                                   reports = report_recipes(),
+                                   diagnostics = NULL,
+                                   plots = NULL,
+                                   reports = NULL,
                                    include_base_diagnostics = TRUE,
                                    include_sensitivity_diagnostics = TRUE) {
   bases <- common_env(bases)
-  sensitivities <- common_env(sensitivities)
   assert_plan_table(bases, "bases")
-  assert_plan_table(sensitivities, "sensitivities")
 
-  sensitivity_rows <- expand_sensitivities(bases, sensitivities)
+  if (is.null(diagnostics)) {
+    diagnostics <- if (exists("starter_diagnostics_recipes", inherits = TRUE)) {
+      get("starter_diagnostics_recipes", inherits = TRUE)
+    } else {
+      diagnostic_recipes()
+    }
+  }
+  if (is.null(plots)) {
+    plots <- if (exists("plot_runs", inherits = TRUE)) {
+      get("plot_runs", inherits = TRUE)
+    } else {
+      plot_recipes()
+    }
+  }
+  if (is.null(reports)) {
+    reports <- if (exists("report_runs", inherits = TRUE)) {
+      get("report_runs", inherits = TRUE)
+    } else {
+      report_recipes()
+    }
+  }
+
+  if (plan_uses_workflow_recipe_builders(sensitivities, diagnostics)) {
+    plan <- build_recipe_plan(
+      bases = bases,
+      sensitivity_recipes = sensitivities,
+      diagnostics_recipes = diagnostics,
+      plots = plots,
+      reports = reports,
+      include_base_diagnostics = include_base_diagnostics,
+      include_sensitivity_diagnostics = include_sensitivity_diagnostics
+    )
+    validate_plan(plan, yaml_paths = NULL)
+    return(plan)
+  }
+
+  if (plan_has_columns(sensitivities, c(required_plan_columns, "INPUT_TASK", "INPUT_KEY"))) {
+    sensitivity_rows <- common_env(sensitivities)
+  } else {
+    sensitivity_rows <- common_env(expand_sensitivities(bases, normalize_sensitivity_recipes(sensitivities)))
+  }
+  assert_plan_table(sensitivity_rows, "sensitivity rows")
   diagnostic_inputs <- plan_bind_rows(
     if (isTRUE(include_base_diagnostics)) bases else NULL,
     if (isTRUE(include_sensitivity_diagnostics)) sensitivity_rows else NULL
@@ -334,6 +423,73 @@ build_exploration_plan <- function(bases,
     plot = common_env(plot_rows),
     report = common_env(report_rows)
   )
+}
+
+plan_yaml_optional <- function(path) {
+  if (!file.exists(path)) {
+    stop("Kflow YAML file not found: ", path, call. = FALSE)
+  }
+  if (requireNamespace("yaml", quietly = TRUE)) {
+    parsed <- yaml::read_yaml(path)
+    return(as.character(parsed$job_config$optional %||% character()))
+  }
+  lines <- readLines(path, warn = FALSE)
+  start <- grep("^[[:space:]]*optional:[[:space:]]*$", lines)
+  if (!length(start)) {
+    return(character())
+  }
+  lines <- lines[(start[[1]] + 1L):length(lines)]
+  optional <- character()
+  for (line in lines) {
+    if (grepl("^[[:space:]]{4,}-[[:space:]]+", line)) {
+      optional <- c(optional, sub("^[[:space:]]*-[[:space:]]+", "", line))
+    } else if (nzchar(trimws(line)) && grepl("^[^[:space:]]|^[[:space:]]{0,2}[^-[:space:]]", line)) {
+      break
+    }
+  }
+  optional
+}
+
+default_yaml_paths <- function() {
+  c(
+    base = "base/kflow.yaml",
+    sensitivity = "sensitivity/kflow.yaml",
+    diagnostics = "diagnostics/kflow.yaml",
+    plot = "plot/kflow.yaml",
+    report = "report/kflow.yaml"
+  )
+}
+
+validate_plan_yaml_coverage <- function(plan, yaml_paths = default_yaml_paths()) {
+  rows <- list()
+  for (stage in intersect(names(plan), names(yaml_paths))) {
+    optional <- plan_yaml_optional(yaml_paths[[stage]])
+    missing <- setdiff(names(plan[[stage]]), optional)
+    rows[[length(rows) + 1L]] <- data.frame(
+      stage = stage,
+      yaml = yaml_paths[[stage]],
+      missing = paste(missing, collapse = ","),
+      stringsAsFactors = FALSE
+    )
+    if (length(missing)) {
+      stop(
+        "Plan table for ", stage, " has columns not listed in ",
+        yaml_paths[[stage]], ": ", paste(missing, collapse = ", "),
+        call. = FALSE
+      )
+    }
+  }
+  do.call(rbind, rows)
+}
+
+validate_plan <- function(plan, yaml_paths = default_yaml_paths()) {
+  for (stage in names(plan)) {
+    assert_plan_table(plan[[stage]], stage)
+  }
+  if (!is.null(yaml_paths)) {
+    validate_plan_yaml_coverage(plan, yaml_paths)
+  }
+  invisible(TRUE)
 }
 
 preview_plan <- function(plan) {

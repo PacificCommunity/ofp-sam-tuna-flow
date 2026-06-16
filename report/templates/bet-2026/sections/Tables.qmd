@@ -1,0 +1,13 @@
+
+
+| Model | Description                                            |    AIC     | $\Delta$ AIC | Parameters |
+|:-----:|:------------------------------------------------------:|:----------:|:------------:|:----------:|
+|  M1   | Baseline Tweedie (SC17 covariates)                    | 398784.7   |   3832.1     |     89     |
+|  M2   | M1 + Blue shark catch proportion                      | 394952.6   |     0.0      |     90     |
+|  M3   | M1 + Sea surface temperature                          | 398741.9   |   3789.3     |     92     |
+
+: Comparison of different models..
+
+
+
+\newpage

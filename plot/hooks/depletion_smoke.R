@@ -55,10 +55,10 @@ if (isTRUE(package_status$available[package_status$package == "mfclshiny"]) &&
     svg_src <- file.path(mfclshiny_figure_dir, "model-exploration-overview.svg")
     png_src <- file.path(mfclshiny_figure_dir, "model-exploration-overview.png")
     if (file.exists(svg_src)) {
-      file.copy(svg_src, plot_file, overwrite = TRUE)
+      invisible(file.copy(svg_src, plot_file, overwrite = TRUE))
     }
     if (file.exists(png_src)) {
-      file.copy(png_src, png_file, overwrite = TRUE)
+      invisible(file.copy(png_src, png_file, overwrite = TRUE))
     }
     paste("report_figures_ok:", nrow(result$figures), "figures")
   }, error = function(e) {

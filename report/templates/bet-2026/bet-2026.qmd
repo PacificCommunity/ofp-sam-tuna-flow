@@ -1,0 +1,134 @@
+---
+title: "2026 BET Assessment"
+date: last-modified
+date-format: "DD MMMM YYYY"
+author:
+  - name: "K. Kim"
+    affiliations:
+      - id: spc
+        name: "Oceanic Fisheries Programme of the Pacific Community"
+meetingtype: "SCIENTIFIC COMMITTEE"
+meetingnumber: "TWENTY-SECOND REGULAR SESSION"
+meetinglocation: "Samoa"
+meetingdates: "xx-xx August 2026"
+repnumber: WCPFC-SC22-2026/SA-WP-xx
+header-includes: |
+#    \usepackage{draftwatermark}
+format:
+  pdf:
+    pdf-engine: pdflatex
+    template-partials:
+      - before-body.tex
+    documentclass: SCreport
+    fontsize: 11pt
+    geometry:
+      - margin=1in
+    toc: true
+    number-sections: true
+    link-citations: true
+    colorlinks: true
+    linkcolor: SCblue
+    filecolor: SCblue
+    urlcolor: SCblue
+    citecolor: SCblue
+    toccolor: SCblue
+    highlight-style: github
+    code-block-bg: "#f6f8fa"
+    code-block-border-left: "#c5c5c5"
+    code-font: "Consolas, Monaco, 'Andale Mono', monospace"
+    filters:
+      - inline-code.lua
+    header-includes: |
+     \usepackage{mathptmx}
+     \usepackage{xcolor}
+     \definecolor{inlinecodecolor}{RGB}{40, 44, 52}
+     \definecolor{inlinecodebg}{RGB}{245, 245, 245}
+     \let\oldtexttt\texttt
+     \renewcommand{\texttt}[1]{\colorbox{inlinecodebg}{\textcolor{inlinecodecolor}{\oldtexttt{#1}}}}
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    link-citations: true
+    colorlinks: true
+    highlight-style: github
+    self-contained: true
+    css: styles.css
+bibliography: bet-2026.bib
+csl: apa.csl
+
+---
+
+
+\newpage
+
+<!-- Executive summary -->
+
+```{r Summary, child='sections/Executive_summary.qmd'}
+```
+
+
+\newpage
+
+
+<!-- Introduction -->
+
+```{r Introduction, child='sections/Introduction.qmd'}
+```
+
+
+<!-- Methods -->
+
+```{r Methods, child='sections/Methods.qmd'}
+```
+
+
+<!-- Results -->
+
+```{r Results, child='sections/Results.qmd'}
+```
+
+
+<!-- Discussion -->
+
+```{r Discussion, child='sections/Discussion.qmd'}
+```
+
+
+
+<!-- Conclusion -->
+
+```{r Conclusion, child='sections/Conclusion.qmd'}
+```
+
+
+
+
+<!-- Acknowledgments -->
+
+```{r Acknowledgments, child='sections/Acknowledgments.qmd'}
+```
+
+\newpage
+
+# References {.unnumbered}
+
+::: {#refs}
+:::
+
+\newpage
+
+```{=html}
+<br>
+```
+
+
+<!-- Tables -->
+
+```{r Tables, child='sections/Tables.qmd'}
+```
+
+<!-- Figures -->
+
+```{r Figures, child='sections/Figures.qmd'}
+```

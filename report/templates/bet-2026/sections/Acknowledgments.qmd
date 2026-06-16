@@ -1,0 +1,7 @@
+---
+bibliography: ../bet-2026.bib
+---
+
+# Acknowledgments {.unnumbered}
+
+We thank everyone who contributed to this work.

@@ -1,0 +1,9 @@
+---
+bibliography: ../bet-2026.bib
+---
+
+# Results
+
+## Model Convergence
+
+Please converge!

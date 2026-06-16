@@ -1,0 +1,9 @@
+---
+bibliography: ../bet-2026.bib
+---
+
+# Discussion
+
+## Model Performance and Selection
+
+Model performance was evaluated using Akaike's Information Criterion (AIC) and Bayesian Information Criterion (BIC). The selected model demonstrated superior fit compared to alternative specifications, as indicated by lower AIC and BIC values. Residual diagnostics confirmed the adequacy of the model, with no significant patterns observed in residual plots.

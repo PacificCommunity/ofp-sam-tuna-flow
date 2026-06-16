@@ -1,0 +1,7 @@
+---
+bibliography: ../bet-2026.bib
+---
+
+# Executive Summary {.unnumbered}
+
+Let's summarize the key points of this report.
