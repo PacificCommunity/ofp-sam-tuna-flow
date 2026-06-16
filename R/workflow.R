@@ -23,7 +23,7 @@ bet_kflow_repo <- Sys.getenv("BET_KFLOW_REPO", "PacificCommunity/ofp-sam-2026-BE
 bet_kflow_branch <- Sys.getenv("BET_KFLOW_BRANCH", "main")
 bet_source_repo <- Sys.getenv("BET_SOURCE_REPO", "PacificCommunity/ofp-sam-2026-BET")
 bet_source_ref <- Sys.getenv("BET_SOURCE_REF", "main")
-bet_docker_image <- Sys.getenv("BET_DOCKER_IMAGE", "ghcr.io/pacificcommunity/bet-2026:v1.9")
+bet_docker_image <- Sys.getenv("BET_DOCKER_IMAGE", "ghcr.io/pacificcommunity/bet2026-flow:latest")
 bet_flow_group <- paste0("bet-", format(Sys.time(), "%Y%m%d-%H%M%S"))
 
 # ---- Small editable starter tables ----------------------------------------------

@@ -1,7 +1,7 @@
 name: Plot
 description: Combine selected model outputs and create model exploration plots.
 command: bash run.sh
-docker_image: ghcr.io/pacificcommunity/bet-2026:v1.9
+docker_image: ghcr.io/pacificcommunity/bet2026-flow:latest
 resources:
   cpus: 2
   memory: 8GB
@@ -29,4 +29,3 @@ job_config:
     - MFCLKIT_SCRIPT
     - TREE_RESPONSE
     - TREE_PREDICTORS
-

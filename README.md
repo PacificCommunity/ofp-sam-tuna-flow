@@ -39,6 +39,12 @@ changing the Kflow dependency layout.
 Local R is only used to register tasks and launch jobs. The model runs happen
 inside the Kflow Docker runtime.
 
+Default runtime image:
+
+```text
+ghcr.io/pacificcommunity/bet2026-flow:latest
+```
+
 ```r
 install.packages("remotes")
 remotes::install_github("kyuhank/KflowKit", auth_token = Sys.getenv("GITHUB_PAT"))
