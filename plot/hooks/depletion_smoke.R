@@ -50,6 +50,25 @@ if (!"report_label" %in% names(depletion)) {
 utils::write.csv(depletion, file.path(out_dir, "depletion-smoke-combined.csv"), row.names = FALSE)
 utils::write.csv(depletion, file.path(out_dir, "key-quantities-combined.csv"), row.names = FALSE)
 
+quantity_labels <- c(
+  depletion = "Depletion",
+  spawning_potential = "Spawning potential",
+  recruitment = "Recruitment",
+  fishing_mortality = "Fishing mortality"
+)
+quantity_cols <- intersect(names(quantity_labels), names(depletion))
+quantity_long <- do.call(rbind, lapply(quantity_cols, function(quantity) {
+  out <- depletion
+  out$quantity <- quantity
+  out$quantity_label <- unname(quantity_labels[[quantity]])
+  out$value <- suppressWarnings(as.numeric(out[[quantity]]))
+  out[is.finite(out$value), , drop = FALSE]
+}))
+if (is.null(quantity_long) || !nrow(quantity_long)) {
+  stop("No finite key-quantity values were available for plotting.", call. = FALSE)
+}
+utils::write.csv(quantity_long, file.path(out_dir, "key-quantities-long.csv"), row.names = FALSE)
+
 plot_file <- file.path(out_dir, "key-quantities-smoke.svg")
 png_file <- file.path(out_dir, "key-quantities-smoke.png")
 report_figure_dir <- file.path(out_dir, "report-figures")
@@ -96,18 +115,22 @@ writeLines(mfclshiny_status, file.path(out_dir, "mfclshiny-status.txt"))
 
 if ((!file.exists(plot_file) || !file.exists(png_file)) && requireNamespace("ggplot2", quietly = TRUE)) {
   p <- ggplot2::ggplot(
-    depletion,
-    ggplot2::aes(x = year, y = depletion, colour = plot_label, group = interaction(plot_label, model_key, region))
+    quantity_long,
+    ggplot2::aes(
+      x = year,
+      y = value,
+      colour = plot_label,
+      group = interaction(plot_label, model_key, region, quantity)
+    )
   ) +
     ggplot2::geom_line(linewidth = 0.7, alpha = 0.8) +
-    ggplot2::geom_point(size = 1.8, alpha = 0.9) +
-    ggplot2::facet_wrap(ggplot2::vars(region), nrow = 1) +
-    ggplot2::scale_y_continuous(labels = function(x) paste0(round(x * 100), "%"), limits = c(0, 1)) +
+    ggplot2::geom_point(size = 1.25, alpha = 0.85) +
+    ggplot2::facet_grid(ggplot2::vars(quantity_label), ggplot2::vars(region), scales = "free_y") +
     ggplot2::labs(
       title = plot_title,
-      subtitle = "Smoke-run depletion trace; full key quantities require MFCL payload extraction",
+      subtitle = "MFCL smoke key derived quantities from payload or RepOut extraction",
       x = NULL,
-      y = "Depletion",
+      y = "Value",
       colour = "Model"
     ) +
     ggplot2::theme_minimal(base_size = 12) +
@@ -116,27 +139,31 @@ if ((!file.exists(plot_file) || !file.exists(png_file)) && requireNamespace("ggp
       legend.position = "bottom",
       plot.title.position = "plot"
     )
-  ggplot2::ggsave(plot_file, p, width = 10, height = 5, units = "in")
-  ggplot2::ggsave(png_file, p, width = 10, height = 5, units = "in", dpi = 160)
+  ggplot2::ggsave(plot_file, p, width = 10, height = 7, units = "in")
+  ggplot2::ggsave(png_file, p, width = 10, height = 7, units = "in", dpi = 160)
 } else if (!file.exists(plot_file)) {
   grDevices::svg(plot_file, width = 10, height = 5)
-  old <- graphics::par(mar = c(4, 5, 3, 1))
+  old <- graphics::par(mar = c(4, 5, 3, 1), mfrow = c(ceiling(length(quantity_cols) / 2), 2))
   on.exit(graphics::par(old), add = TRUE)
-  avg <- stats::aggregate(depletion ~ year + model_token, depletion, mean)
-  tokens <- unique(avg$model_token)
-  graphics::plot(
-    range(avg$year),
-    c(0, 1),
-    type = "n",
-    xlab = "",
-    ylab = "Depletion",
-    main = plot_title
-  )
-  cols <- grDevices::hcl.colors(length(tokens), "Dark 3")
-  for (i in seq_along(tokens)) {
-    x <- avg[avg$model_token == tokens[[i]], ]
-    graphics::lines(x$year, x$depletion, col = cols[[i]], lwd = 2)
-    graphics::points(x$year, x$depletion, col = cols[[i]], pch = 19)
+  tokens <- unique(quantity_long$model_token)
+  cols <- grDevices::hcl.colors(max(length(tokens), 1L), "Dark 3")
+  for (quantity in quantity_cols) {
+    panel <- quantity_long[quantity_long$quantity == quantity, , drop = FALSE]
+    avg <- stats::aggregate(value ~ year + model_token, panel, mean)
+    graphics::plot(
+      range(avg$year),
+      range(avg$value, finite = TRUE),
+      type = "n",
+      xlab = "",
+      ylab = "Value",
+      main = quantity_labels[[quantity]]
+    )
+    for (i in seq_along(tokens)) {
+      x <- avg[avg$model_token == tokens[[i]], ]
+      if (!nrow(x)) next
+      graphics::lines(x$year, x$value, col = cols[[i]], lwd = 2)
+      graphics::points(x$year, x$value, col = cols[[i]], pch = 19)
+    }
   }
   graphics::legend("bottomleft", legend = tokens, col = cols, lwd = 2, bty = "n")
   grDevices::dev.off()
@@ -153,11 +180,11 @@ if (file.exists(plot_file)) {
 }
 
 summary <- stats::aggregate(
-  depletion ~ model_key + model_token + change_token,
-  depletion,
+  value ~ model_key + model_token + change_token + quantity + quantity_label,
+  quantity_long,
   function(x) round(mean(x, na.rm = TRUE), 3)
 )
-names(summary)[names(summary) == "depletion"] <- "mean_depletion"
+names(summary)[names(summary) == "value"] <- "mean_value"
 summary$plot_file <- basename(plot_file)
 report_figures <- list.files(report_figure_dir, pattern = "[.]png$", recursive = TRUE, full.names = FALSE)
 report_figures <- sort(file.path("report-figures", report_figures))
@@ -171,4 +198,5 @@ summary$report_figure <- if ("report-figures/key-quantities-smoke.png" %in% repo
   ""
 }
 summary$report_figures <- paste(report_figures, collapse = ",")
+utils::write.csv(summary, file.path(out_dir, "key-quantities-plot-summary.csv"), row.names = FALSE)
 utils::write.csv(summary, file.path(out_dir, "depletion-plot-summary.csv"), row.names = FALSE)

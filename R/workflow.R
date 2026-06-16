@@ -85,10 +85,10 @@ flow_kflow_branch <- flow_env_any(c("FLOW_KFLOW_BRANCH", "TUNA_FLOW_BRANCH"), "m
 flow_source_repo <- flow_env_any(c("FLOW_SOURCE_REPO", "TUNA_FLOW_SOURCE_REPO"), "PacificCommunity/ofp-sam-bet2026-inputs")
 flow_source_ref <- flow_env_any(c("FLOW_SOURCE_REF", "TUNA_FLOW_SOURCE_REF"), "main")
 flow_source_path <- flow_env_any(c("FLOW_SOURCE_PATH", "TUNA_FLOW_SOURCE_PATH", "SOURCE_PATH"), "")
-flow_report_repo <- flow_env_any(c("FLOW_REPORT_REPO", "TUNA_FLOW_REPORT_REPO"), "PacificCommunity/ofp-sam-2026-BET-report")
+flow_report_repo <- flow_env_any(c("FLOW_REPORT_REPO", "TUNA_FLOW_REPORT_REPO"), "PacificCommunity/ofp-sam-bet2026-report")
 flow_report_ref <- flow_env_any(c("FLOW_REPORT_REF", "TUNA_FLOW_REPORT_REF"), "main")
 flow_report_path <- flow_env_any(c("FLOW_REPORT_PATH", "TUNA_FLOW_REPORT_PATH"), "report")
-flow_report_main <- flow_env_any(c("FLOW_REPORT_MAIN", "TUNA_FLOW_REPORT_MAIN"), "bet-2026.qmd")
+flow_report_main <- flow_env_any(c("FLOW_REPORT_MAIN", "TUNA_FLOW_REPORT_MAIN"), "assessment-report.qmd")
 flow_docker_image <- flow_env_any(
   c("FLOW_DOCKER_IMAGE", "TUNA_FLOW_DOCKER_IMAGE"),
   "ghcr.io/pacificcommunity/tuna-flow:latest"
@@ -427,9 +427,9 @@ report_runs <- data.frame(
   BASE_MODEL_KEY = flow_base_job_key,
   CHANGE_TOKEN = "Report",
   CHANGE_GROUP = "report",
-  CHANGE_SUMMARY = "Renders the selected key derived quantity plot into a Quarto PDF report.",
+  CHANGE_SUMMARY = "Renders selected Kflow key quantity figures into a Quarto PDF report.",
   JOB_TITLE = paste("Report:", flow_species, "key quantities smoke"),
-  JOB_DESCRIPTION = "Renders a Quarto report from the selected key derived quantity plot.",
+  JOB_DESCRIPTION = "Renders a Quarto report from the selected Kflow key quantity figure package.",
   INPUT_TASK = flow_task_codes[["plot"]],
   INPUT_KEY = "plot-key-quantities-smoke",
   REPORT_TITLE = paste(flow_assessment_label, "key quantities smoke report"),
@@ -519,6 +519,11 @@ common_env <- function(rows) {
     rows$MFCL_REQUIRE_KEY_QUANTITIES
   } else {
     ifelse(tolower(rows$MFCL_BACKEND) == "mfcl_smoke", "true", "false")
+  }
+  rows$MFCL_SMOKE_LIVE_LOG_STREAM <- if ("MFCL_SMOKE_LIVE_LOG_STREAM" %in% names(rows)) {
+    rows$MFCL_SMOKE_LIVE_LOG_STREAM
+  } else {
+    ifelse(tolower(rows$MFCL_BACKEND) == "mfcl_smoke", "stderr", "none")
   }
   rows$INPUT_RECIPE_REMOVE_START_FILES <- if ("INPUT_RECIPE_REMOVE_START_FILES" %in% names(rows)) {
     rows$INPUT_RECIPE_REMOVE_START_FILES

@@ -49,6 +49,29 @@ figure_label <- function(rel) {
   paste0(toupper(substr(label, 1, 1)), substr(label, 2, nchar(label)))
 }
 
+yaml_scalar <- function(value) {
+  sprintf("\"%s\"", gsub("\"", "'", as.character(value %||% "")))
+}
+
+rewrite_yaml_scalars <- function(path, values) {
+  values <- values[nzchar(names(values)) & nzchar(as.character(values))]
+  if (!length(values)) {
+    return(invisible(FALSE))
+  }
+  lines <- if (file.exists(path)) readLines(path, warn = FALSE) else character()
+  for (key in names(values)) {
+    replacement <- sprintf("%s: %s", key, yaml_scalar(values[[key]]))
+    hit <- grep(sprintf("^%s\\s*:", gsub("([][{}()+*^$|\\\\?.])", "\\\\\\1", key)), lines)
+    if (length(hit)) {
+      lines[[hit[[1]]]] <- replacement
+    } else {
+      lines <- c(lines, replacement)
+    }
+  }
+  writeLines(lines, path)
+  invisible(TRUE)
+}
+
 figure_input_roots <- kflow_split(kflow_env("REPORT_FIGURE_INPUT_DIR", ""))
 figure_roots <- unique(c(ctx$input_dir, figure_input_roots))
 plot_index <- do.call(rbind, lapply(figure_roots, scan_plot_files))
@@ -83,7 +106,7 @@ report_source_repo <- kflow_env("REPORT_SOURCE_REPO", "")
 report_source_ref <- kflow_env("REPORT_SOURCE_REF", "main")
 report_source_path <- kflow_env("REPORT_SOURCE_PATH", "")
 template_dir_setting <- kflow_env("REPORT_TEMPLATE_DIR", "templates/tuna-assessment")
-template_main <- kflow_env("REPORT_TEMPLATE_MAIN", kflow_env("REPORT_MAIN", if (nzchar(report_source_repo)) "bet-2026.qmd" else "assessment.qmd"))
+template_main <- kflow_env("REPORT_TEMPLATE_MAIN", kflow_env("REPORT_MAIN", if (nzchar(report_source_repo)) "assessment-report.qmd" else "assessment.qmd"))
 title <- kflow_env("REPORT_TITLE", if (nzchar(report_source_repo)) "" else "Tuna Kflow report")
 report_file_stem <- kflow_env("REPORT_FILE_STEM", if (nzchar(report_source_repo)) "bet-2026-report" else "tuna-flow-report")
 effective_render_format <- render_format
@@ -123,7 +146,18 @@ if (!file.exists(main_qmd)) {
   stop(sprintf("Report template main file was not found: %s", main_qmd), call. = FALSE)
 }
 
-if (nzchar(title)) {
+report_config_file <- file.path(render_dir, "report-config.yml")
+if (nzchar(title) && file.exists(report_config_file)) {
+  rewrite_yaml_scalars(
+    report_config_file,
+    c(
+      title = title,
+      species = kflow_env("FLOW_SPECIES", ""),
+      species_label = kflow_env("FLOW_SPECIES_LABEL", ""),
+      assessment_year = kflow_env("FLOW_ASSESSMENT_YEAR", "")
+    )
+  )
+} else if (nzchar(title)) {
   main_lines <- readLines(main_qmd, warn = FALSE)
   title_line <- grep("^title:", main_lines)[1]
   if (!is.na(title_line)) {

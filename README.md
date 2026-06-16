@@ -17,7 +17,7 @@ The starter flow runs one base model, several explicit sensitivity recipes
 derived quantities figure, and a Quarto report. The report task is registered
 separately as
 `bet-2026-report` and renders from
-`PacificCommunity/ofp-sam-2026-BET-report`, so it can be rerun on existing
+`PacificCommunity/ofp-sam-bet2026-report`, so it can be rerun on existing
 figures without relaunching model or plot jobs.
 
 Start here:

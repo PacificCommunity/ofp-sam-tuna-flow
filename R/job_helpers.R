@@ -64,18 +64,29 @@ kflow_sanitize_shell_command <- function(command) {
   paste(unset, command, sep = "; ")
 }
 
-kflow_run_shell <- function(command, workdir = getwd(), log_file = NULL, sanitize_env = FALSE) {
+kflow_run_shell <- function(command,
+                            workdir = getwd(),
+                            log_file = NULL,
+                            sanitize_env = FALSE,
+                            live_stream = "none") {
   old <- setwd(workdir)
   on.exit(setwd(old), add = TRUE)
   if (isTRUE(sanitize_env)) {
     command <- kflow_sanitize_shell_command(command)
   }
+  live_stream <- tolower(live_stream %||% "none")
   if (is.null(log_file)) {
     status <- system2("bash", c("-lc", shQuote(command)))
   } else {
     log_file <- normalizePath(log_file, winslash = "/", mustWork = FALSE)
     dir.create(dirname(log_file), recursive = TRUE, showWarnings = FALSE)
-    wrapped <- sprintf("(%s) >> %s 2>&1", command, shQuote(log_file))
+    if (live_stream %in% c("stderr", "err", "error")) {
+      wrapped <- sprintf("set -o pipefail; (%s) 2>&1 | tee -a %s >&2", command, shQuote(log_file))
+    } else if (live_stream %in% c("stdout", "out", "workflow")) {
+      wrapped <- sprintf("set -o pipefail; (%s) 2>&1 | tee -a %s", command, shQuote(log_file))
+    } else {
+      wrapped <- sprintf("(%s) >> %s 2>&1", command, shQuote(log_file))
+    }
     status <- system2("bash", c("-lc", shQuote(wrapped)))
   }
   if (!identical(status, 0L)) {
@@ -114,6 +125,7 @@ kflow_clone_github_repo <- function(repo, ref = "main", work_dir = "work/source"
   git_cmds <- if (nzchar(auth_args)) c(paste("git", auth_args), "git -c credential.helper=") else "git"
   git_cmds <- unique(git_cmds)
   clone_error <- NULL
+  branch_errors <- character()
   ok <- FALSE
 
   for (git_cmd in git_cmds) {
@@ -131,7 +143,7 @@ kflow_clone_github_repo <- function(repo, ref = "main", work_dir = "work/source"
       TRUE
     }, error = function(e) {
       clone_error <<- e
-      kflow_note("Branch/tag clone failed: ", conditionMessage(e), log_file = log_file)
+      branch_errors <<- c(branch_errors, conditionMessage(e))
       FALSE
     })
     if (isTRUE(ok)) {
@@ -140,7 +152,9 @@ kflow_clone_github_repo <- function(repo, ref = "main", work_dir = "work/source"
   }
 
   if (!isTRUE(ok)) {
-    kflow_note("Retrying clone without branch checkout.", log_file = log_file)
+    if (length(branch_errors)) {
+      kflow_note("Branch/tag clone failed; retrying without branch checkout. Last error: ", tail(branch_errors, 1), log_file = log_file)
+    }
     for (git_cmd in git_cmds) {
       unlink(work_dir, recursive = TRUE, force = TRUE)
       ok <- tryCatch({
@@ -1105,7 +1119,13 @@ kflow_run_mfcl_smoke <- function(source_dir, out_dir, stage, log_file = NULL) {
     )
     kflow_note("No input .par found; running MFCL smoke makepar in ", model_dir, log_file = log_file)
   }
-  kflow_run_shell(command, workdir = model_dir, log_file = log_file, sanitize_env = TRUE)
+  kflow_run_shell(
+    command,
+    workdir = model_dir,
+    log_file = log_file,
+    sanitize_env = TRUE,
+    live_stream = kflow_env("MFCL_SMOKE_LIVE_LOG_STREAM", "stderr")
+  )
 
   output_par <- file.path(model_dir, output_par_name)
   if (!file.exists(output_par)) {

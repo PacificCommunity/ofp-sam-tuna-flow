@@ -201,7 +201,8 @@ The report job writes:
 - `model-registry.csv`
 
 The report job is registered separately as `bet-2026-report`. It clones
-`PacificCommunity/ofp-sam-2026-BET-report`, copies upstream Kflow figures into
+`PacificCommunity/ofp-sam-bet2026-report`, renders `assessment-report.qmd`,
+copies upstream Kflow figures into
 the report, and renders only the compact report outputs. That lets you rerun
 only the report stage from an existing plot job:
 
