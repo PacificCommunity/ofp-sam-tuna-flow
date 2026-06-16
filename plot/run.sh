@@ -63,7 +63,7 @@ ensure_runtime_library() {
 install_runtime_cran_dependencies() {
   case "${KFLOW_RUNTIME_PACKAGES:-}" in
     *mfclrtmb=*)
-      Rscript -e 'lib <- Sys.getenv("R_LIBS_USER"); if (!nzchar(lib)) stop("R_LIBS_USER is required for runtime installs", call. = FALSE); dir.create(lib, recursive = TRUE, showWarnings = FALSE); .libPaths(unique(c(lib, .libPaths()))); repos <- getOption("repos"); if (!length(repos) || identical(unname(repos[["CRAN"]]), "@CRAN@")) options(repos = c(CRAN = "https://cloud.r-project.org")); missing <- setdiff(c("TMB", "RTMB"), rownames(utils::installed.packages())); if (length(missing)) utils::install.packages(missing, lib = lib, dependencies = TRUE)' ;;
+      Rscript -e 'lib <- Sys.getenv("R_LIBS_USER"); if (!nzchar(lib)) stop("R_LIBS_USER is required for runtime installs", call. = FALSE); dir.create(lib, recursive = TRUE, showWarnings = FALSE); .libPaths(unique(c(lib, .libPaths()))); options(repos = c(CRAN = "https://cloud.r-project.org")); pkgs <- c("TMB", "RTMB"); missing <- setdiff(pkgs, rownames(utils::installed.packages())); if (length(missing)) utils::install.packages(missing, lib = lib, dependencies = TRUE, repos = getOption("repos")); missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]; if (length(missing)) { message("[kflow-runtime-update] Required CRAN package(s) unavailable after install: ", paste(missing, collapse = ", ")); quit(save = "no", status = 45) }' ;;
   esac
 }
 
