@@ -79,6 +79,9 @@ install_runtime_cran_dependencies() {
 
 run_runtime_package_update() {
   local update_status
+  if runtime_packages_disabled; then
+    return 0
+  fi
   ensure_runtime_library
   if [[ ! -x /usr/local/bin/30-update-kflow-runtime-packages ]]; then
     return 0
