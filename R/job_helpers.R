@@ -420,11 +420,14 @@ kflow_mfcl_log_summary <- function(log_file, out_dir, model_dir) {
   if (length(error_hits)) {
     writeLines(utils::head(error_hits, 30), file.path(out_dir, "mfcl-log-errors.txt"))
     writeLines(utils::head(error_hits, 30), file.path(model_dir, "mfcl-log-errors.txt"))
-    kflow_note(
+    text <- paste0(
       "MFCL log contains ", length(error_hits),
-      " error-looking line(s). See mfcl-log-summary.csv and mfcl-log-errors.txt.",
-      log_file = log_file
+      " flagged line(s). See mfcl-log-summary.csv and mfcl-log-errors.txt."
     )
+    cat(text, "\n")
+    if (!is.null(log_file)) {
+      cat(text, "\n", file = log_file, append = TRUE)
+    }
     if (kflow_bool("MFCL_SMOKE_FAIL_ON_LOG_ERROR", FALSE)) {
       stop("MFCL smoke log contains error-looking lines and MFCL_SMOKE_FAIL_ON_LOG_ERROR=1.", call. = FALSE)
     }
