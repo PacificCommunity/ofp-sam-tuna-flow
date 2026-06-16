@@ -15,7 +15,7 @@ using:
 The starter flow runs one base model, several explicit sensitivity recipes
 (`FixM`, `FixVB`, `Sel4`, `IndexCvHalf`), jitter-style diagnostics, a depletion
 figure, and a Quarto report. The report task is registered separately as
-`ofp-sam-bet2026-report` and renders from
+`bet-2026-report` and renders from
 `PacificCommunity/ofp-sam-2026-BET-report`, so it can be rerun on existing
 figures without relaunching model or plot jobs.
 

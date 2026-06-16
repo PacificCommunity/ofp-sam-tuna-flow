@@ -196,11 +196,11 @@ The plot job writes:
 
 The report job writes:
 
-- `ofp-sam-bet2026-report.pdf` or `.html`, depending on `REPORT_RENDER_FORMAT`
+- `bet-2026-report.pdf` or `.html`, depending on `REPORT_RENDER_FORMAT`
 - `report-summary.csv`
 - `model-registry.csv`
 
-The report job is registered separately as `ofp-sam-bet2026-report`. It clones
+The report job is registered separately as `bet-2026-report`. It clones
 `PacificCommunity/ofp-sam-2026-BET-report`, copies upstream Kflow figures into
 the report, and renders only the compact report outputs. That lets you rerun
 only the report stage from an existing plot job:

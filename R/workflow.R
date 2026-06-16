@@ -98,7 +98,7 @@ flow_task_codes <- setNames(paste(flow_task_prefix, c("base", "sensitivity", "di
 ))
 flow_task_codes[["report"]] <- flow_env_any(
   c("FLOW_REPORT_TASK_CODE", "TUNA_FLOW_REPORT_TASK_CODE"),
-  paste0("ofp-sam-", flow_species_slug, flow_assessment_year, "-report")
+  paste(flow_task_prefix, "report", sep = "-")
 )
 flow_default_program <- flow_env_any(c("FLOW_MFCL_PROGRAM", "TUNA_FLOW_MFCL_PROGRAM"), "/home/mfcl/mfclo64")
 flow_default_input_dir <- flow_env_any(c("FLOW_BASE_INPUT_DIR", "TUNA_FLOW_BASE_INPUT_DIR"), "mfcl/inputs/2023_4region_1007")
@@ -109,7 +109,7 @@ if (!length(flow_base_input_dirs)) {
 flow_default_input_variant <- flow_env_any(c("FLOW_BASE_INPUT_VARIANT", "TUNA_FLOW_BASE_INPUT_VARIANT"), basename(flow_base_input_dirs[[1]]))
 flow_base_job_key <- flow_env_any(c("FLOW_BASE_JOB_KEY", "TUNA_FLOW_BASE_JOB_KEY"), "base-4r-smoke")
 flow_base_token <- flow_env_any(c("FLOW_BASE_TOKEN", "TUNA_FLOW_BASE_TOKEN"), "Base4R")
-flow_report_file_stem <- flow_env_any(c("FLOW_REPORT_FILE_STEM", "TUNA_FLOW_REPORT_FILE_STEM"), "ofp-sam-bet2026-report")
+flow_report_file_stem <- flow_env_any(c("FLOW_REPORT_FILE_STEM", "TUNA_FLOW_REPORT_FILE_STEM"), paste(flow_task_prefix, "report", sep = "-"))
 flow_ini_version_target <- flow_env_any(c("FLOW_MFCL_INI_VERSION_TARGET", "MFCL_INI_VERSION_TARGET"), "1007")
 flow_base_tokens <- flow_split_csv(flow_env_any(c("FLOW_BASE_TOKENS", "TUNA_FLOW_BASE_TOKENS"), ""))
 flow_base_job_keys <- flow_split_csv(flow_env_any(c("FLOW_BASE_JOB_KEYS", "TUNA_FLOW_BASE_JOB_KEYS"), ""))

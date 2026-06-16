@@ -1,4 +1,4 @@
-name: ofp-sam-bet2026-report
+name: bet-2026-report
 description: Render the BET 2026 assessment report from selected Kflow figures or a report repo checkout.
 command: bash run.sh
 docker_image: ghcr.io/pacificcommunity/tuna-flow:latest
