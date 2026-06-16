@@ -247,10 +247,12 @@ The starter backend is the MFCL executable supplied by the Docker image:
 The repository is structured so `MFCL_BACKEND=mfclrtmb` can be added later
 through a backend script without changing the Kflow dependency layout.
 
-Private helper packages such as `mfclkit`, `mfclshiny`, `mfclrtmb`, and
-`KflowKit` can be updated at Docker container startup when
-`KFLOW_RUNTIME_UPDATE=auto` and `GIT_PAT` or `GITHUB_PAT` are available. The
-public smoke path keeps runtime updates off, so it runs without exposing private
-package code or contacting private GitHub repositories.
+Private helper packages are requested per stage rather than installed as one
+large bundle. Model jobs request `mfclkit`, `MFCL_BACKEND=mfclrtmb` also requests
+`mfclrtmb`, plot jobs that use `PLOT_BACKEND=mfclshiny` request `mfclshiny`, and
+report-only jobs leave `KFLOW_RUNTIME_PACKAGES` unset or use
+`KFLOW_RUNTIME_PACKAGES=none`. Runtime updates only contact GitHub when
+`KFLOW_RUNTIME_UPDATE=auto`, an explicit non-`none` package list, and `GIT_PAT`
+or `GITHUB_PAT` are available.
 Kflow clone tokens are not forwarded into the container unless a job explicitly
 sets `KFLOW_FORWARD_GITHUB_TOKEN_TO_RUNTIME=1`.

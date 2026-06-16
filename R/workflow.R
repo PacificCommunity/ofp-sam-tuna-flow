@@ -451,17 +451,32 @@ report_runs <- data.frame(
 
 # ---- Runtime package defaults ----------------------------------------------------
 
-runtime_package_specs <- function(backend) {
-  base_specs <- c(
-    "mfclkit=PacificCommunity/ofp-sam-mfclkit@main",
-    "mfclshiny=PacificCommunity/mfclshiny@main",
-    "KflowKit=kyuhank/KflowKit@main"
+runtime_package_specs <- function(backend, stage = "", plot_backend = "", mfclshiny_script = "") {
+  specs <- c(
+    mfclrtmb = "mfclrtmb=PacificCommunity/ofp-sam-mfclrtmb@main",
+    mfclkit = "mfclkit=PacificCommunity/ofp-sam-mfclkit@main",
+    mfclshiny = "mfclshiny=PacificCommunity/mfclshiny@main"
   )
   backend <- tolower(as.character(backend %||% "mfcl_exe"))
-  if (identical(backend, "mfclrtmb")) {
-    return(paste(c("mfclrtmb=PacificCommunity/ofp-sam-mfclrtmb@main", base_specs), collapse = ","))
+  stage <- tolower(as.character(stage %||% ""))
+  plot_backend <- tolower(as.character(plot_backend %||% ""))
+  mfclshiny_script <- as.character(mfclshiny_script %||% "")
+  if (identical(stage, "report")) {
+    return("none")
   }
-  paste(base_specs, collapse = ",")
+  if (identical(stage, "plot") || identical(plot_backend, "mfclshiny") || nzchar(mfclshiny_script)) {
+    return(specs[["mfclshiny"]])
+  }
+  if (identical(stage, "diagnostics") || identical(backend, "diagnostics_smoke")) {
+    return("none")
+  }
+  if (identical(backend, "mfclrtmb")) {
+    return(paste(c(specs[["mfclrtmb"]], specs[["mfclkit"]]), collapse = ","))
+  }
+  if (backend %in% c("mfcl_exe", "mfcl_smoke")) {
+    return(specs[["mfclkit"]])
+  }
+  "none"
 }
 
 # ---- Row normalization -----------------------------------------------------------
@@ -525,7 +540,17 @@ common_env <- function(rows) {
   rows$KFLOW_RUNTIME_PACKAGES <- if ("KFLOW_RUNTIME_PACKAGES" %in% names(rows)) {
     rows$KFLOW_RUNTIME_PACKAGES
   } else {
-    vapply(rows$MFCL_BACKEND, runtime_package_specs, character(1))
+    stage <- if ("CHANGE_GROUP" %in% names(rows)) rows$CHANGE_GROUP else ""
+    plot_backend <- if ("PLOT_BACKEND" %in% names(rows)) rows$PLOT_BACKEND else ""
+    mfclshiny_script <- if ("MFCLSHINY_SCRIPT" %in% names(rows)) rows$MFCLSHINY_SCRIPT else ""
+    mapply(
+      runtime_package_specs,
+      rows$MFCL_BACKEND,
+      stage,
+      plot_backend,
+      mfclshiny_script,
+      USE.NAMES = FALSE
+    )
   }
   rows$KFLOW_RUNTIME_GITHUB_AUTH <- if ("KFLOW_RUNTIME_GITHUB_AUTH" %in% names(rows)) {
     rows$KFLOW_RUNTIME_GITHUB_AUTH
