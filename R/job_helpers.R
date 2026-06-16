@@ -576,7 +576,66 @@ kflow_write_smoke_model_info <- function(model_dir, stage, run_mode, program, fr
   invisible(info)
 }
 
-kflow_try_build_mfclshiny_payload <- function(model_dir, out_dir, log_file = NULL) {
+kflow_find_smoke_rep_file <- function(model_dir, output_par_name = "") {
+  candidates <- character()
+  if (nzchar(output_par_name)) {
+    candidates <- c(
+      file.path(model_dir, paste0("plot-", output_par_name, ".rep")),
+      file.path(model_dir, paste0(tools::file_path_sans_ext(output_par_name), ".rep"))
+    )
+  }
+  candidates <- c(
+    candidates,
+    file.path(model_dir, "ests.rep"),
+    list.files(model_dir, pattern = "[.]rep$", full.names = TRUE, ignore.case = TRUE)
+  )
+  candidates <- unique(candidates[file.exists(candidates)])
+  if (!length(candidates)) {
+    return("")
+  }
+  priority <- function(path) {
+    name <- basename(path)
+    if (nzchar(output_par_name) && identical(name, paste0("plot-", output_par_name, ".rep"))) return(1L)
+    if (grepl("^plot-.*[.]rep$", name, ignore.case = TRUE)) return(2L)
+    if (identical(name, "ests.rep")) return(3L)
+    10L
+  }
+  candidates[order(vapply(candidates, priority, integer(1)), file.info(candidates)$mtime, decreasing = FALSE)][[1L]]
+}
+
+kflow_try_build_rep_payload <- function(model_dir, output_par_name = "", log_file = NULL) {
+  payload_file <- file.path(model_dir, "model_payload.rds")
+  rep_file <- kflow_find_smoke_rep_file(model_dir, output_par_name = output_par_name)
+  if (!nzchar(rep_file) || !file.exists(rep_file)) {
+    return("flr4mfcl_rep_payload_unavailable:no_rep_file")
+  }
+  if (!requireNamespace("FLR4MFCL", quietly = TRUE)) {
+    return("flr4mfcl_rep_payload_unavailable:FLR4MFCL_missing")
+  }
+  status <- tryCatch({
+    rep_out <- suppressWarnings(FLR4MFCL::read.MFCLRep(rep_file))
+    info <- if (file.exists(file.path(model_dir, "model_info.rds"))) {
+      tryCatch(readRDS(file.path(model_dir, "model_info.rds")), error = function(e) NULL)
+    } else {
+      NULL
+    }
+    payload <- list(
+      version = "kflow_rep_payload_v1",
+      created_at = as.character(Sys.time()),
+      folder = normalizePath(model_dir, winslash = "/", mustWork = FALSE),
+      files = list(rep = normalizePath(rep_file, winslash = "/", mustWork = FALSE)),
+      data = list(RepOut = rep_out, info = info)
+    )
+    saveRDS(payload, payload_file, compress = "xz")
+    "flr4mfcl_rep_payload_ok"
+  }, error = function(e) {
+    paste("flr4mfcl_rep_payload_skipped:", conditionMessage(e))
+  })
+  kflow_note("Fallback RepOut payload status: ", status, log_file = log_file)
+  status
+}
+
+kflow_try_build_mfclshiny_payload <- function(model_dir, out_dir, output_par_name = "", log_file = NULL) {
   payload_file <- file.path(model_dir, "model_payload.rds")
   if (requireNamespace("mfclshiny", quietly = TRUE) &&
       "build_model_payload" %in% getNamespaceExports("mfclshiny")) {
@@ -588,6 +647,10 @@ kflow_try_build_mfclshiny_payload <- function(model_dir, out_dir, log_file = NUL
     })
   } else {
     status <- "mfclshiny_payload_unavailable"
+  }
+  if (!file.exists(payload_file)) {
+    fallback_status <- kflow_try_build_rep_payload(model_dir, output_par_name = output_par_name, log_file = log_file)
+    status <- paste(status, fallback_status, sep = "; ")
   }
   writeLines(status, file.path(out_dir, "model-payload-status.txt"))
   kflow_note("Model payload status: ", status, log_file = log_file)
@@ -1062,7 +1125,7 @@ kflow_run_mfcl_smoke <- function(source_dir, out_dir, stage, log_file = NULL) {
     footer = footer,
     log_summary = log_summary
   )
-  kflow_try_build_mfclshiny_payload(model_dir, out_dir, log_file = log_file)
+  kflow_try_build_mfclshiny_payload(model_dir, out_dir, output_par_name = output_par_name, log_file = log_file)
   smoke <- data.frame(
     stage = stage,
     run_label = kflow_env("RUN_LABEL", ""),

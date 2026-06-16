@@ -474,7 +474,7 @@ runtime_package_specs <- function(backend, stage = "", plot_backend = "", mfclsh
     return(paste(c(specs[["mfclrtmb"]], specs[["mfclkit"]]), collapse = ","))
   }
   if (identical(backend, "mfcl_smoke")) {
-    return(paste(c(specs[["mfclkit"]], specs[["mfclshiny"]]), collapse = ","))
+    return(specs[["mfclkit"]])
   }
   if (identical(backend, "mfcl_exe")) {
     return(specs[["mfclkit"]])
@@ -543,7 +543,7 @@ common_env <- function(rows) {
   rows$TUNA_FLOW_RUNTIME_REQUIRE_PRIVATE_PACKAGES <- if ("TUNA_FLOW_RUNTIME_REQUIRE_PRIVATE_PACKAGES" %in% names(rows)) {
     rows$TUNA_FLOW_RUNTIME_REQUIRE_PRIVATE_PACKAGES
   } else {
-    "true"
+    "false"
   }
   rows$TUNA_FLOW_RUNTIME_UPDATE <- if ("TUNA_FLOW_RUNTIME_UPDATE" %in% names(rows)) {
     rows$TUNA_FLOW_RUNTIME_UPDATE

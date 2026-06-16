@@ -99,6 +99,86 @@ run_runtime_package_update() {
   echo "[kflow-runtime-update] Runtime package update failed; continuing with bundled packages." >&2
 }
 
+install_missing_runtime_packages() {
+  if runtime_packages_disabled; then
+    return 0
+  fi
+  ensure_runtime_library
+  Rscript - <<'RS'
+truthy <- function(value) tolower(value) %in% c("1", "true", "yes", "y", "on", "always")
+spec_text <- Sys.getenv("KFLOW_RUNTIME_PACKAGES", "")
+if (!nzchar(spec_text) || tolower(trimws(spec_text)) %in% c("0", "false", "no", "off", "none", "skip")) {
+  quit(save = "no", status = 0)
+}
+parts <- trimws(strsplit(spec_text, ",", fixed = TRUE)[[1]])
+parts <- parts[nzchar(parts) & grepl("=", parts, fixed = TRUE)]
+if (!length(parts)) quit(save = "no", status = 0)
+specs <- lapply(parts, function(part) {
+  eq <- regexpr("=", part, fixed = TRUE)[1]
+  package <- trimws(substr(part, 1, eq - 1))
+  repo_ref <- trimws(substr(part, eq + 1, nchar(part)))
+  at <- regexpr("@", repo_ref, fixed = TRUE)[1]
+  if (at > 0) {
+    repo <- substr(repo_ref, 1, at - 1)
+    ref <- substr(repo_ref, at + 1, nchar(repo_ref))
+  } else {
+    repo <- repo_ref
+    ref <- "main"
+  }
+  list(package = package, repo = repo, ref = ref)
+})
+lib <- Sys.getenv("R_LIBS_USER", "")
+if (!nzchar(lib)) quit(save = "no", status = 43)
+dir.create(lib, recursive = TRUE, showWarnings = FALSE)
+.libPaths(unique(c(lib, .libPaths())))
+missing <- specs[!vapply(specs, function(spec) requireNamespace(spec$package, quietly = TRUE), logical(1))]
+if (!length(missing)) quit(save = "no", status = 0)
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+if (!requireNamespace("remotes", quietly = TRUE)) {
+  utils::install.packages("remotes", lib = lib, dependencies = TRUE, repos = getOption("repos"))
+}
+token <- ""
+if (truthy(Sys.getenv("KFLOW_FORWARD_GITHUB_TOKEN_TO_RUNTIME", "true"))) {
+  for (name in c("GITHUB_PAT", "GIT_PAT", "GH_TOKEN", "KFLOW_GITHUB_TOKEN", "KFLOW_PERSONAL_TOKEN")) {
+    value <- Sys.getenv(name, "")
+    if (nzchar(value)) {
+      token <- value
+      break
+    }
+  }
+}
+install_one <- function(spec, token_value = "") {
+  message("[kflow-runtime-update] Installing missing runtime package ", spec$package, " from ", spec$repo, "@", spec$ref, ".")
+  remotes::install_github(
+    spec$repo,
+    ref = spec$ref,
+    auth_token = if (nzchar(token_value)) token_value else NULL,
+    lib = lib,
+    upgrade = "never",
+    force = TRUE,
+    quiet = TRUE
+  )
+}
+for (spec in missing) {
+  err <- tryCatch({ install_one(spec, token); NULL }, error = function(e) e)
+  if (inherits(err, "error") && nzchar(token)) {
+    message("[kflow-runtime-update] Token install failed for ", spec$package, "; retrying without token: ", conditionMessage(err))
+    err <- tryCatch({ install_one(spec, ""); NULL }, error = function(e) e)
+  }
+  if (inherits(err, "error")) {
+    message("[kflow-runtime-update] Optional runtime package install failed for ", spec$package, ": ", conditionMessage(err))
+  }
+}
+missing_after <- vapply(specs, function(spec) !requireNamespace(spec$package, quietly = TRUE), logical(1))
+if (any(missing_after) && truthy(Sys.getenv("KFLOW_RUNTIME_REQUIRE_PRIVATE_PACKAGES", "false"))) {
+  message("[kflow-runtime-update] Required runtime package(s) unavailable after fallback install: ",
+          paste(vapply(specs[missing_after], function(spec) spec$package, character(1)), collapse = ", "))
+  quit(save = "no", status = 44)
+}
+quit(save = "no", status = 0)
+RS
+}
+
 verify_runtime_packages() {
   case "${KFLOW_RUNTIME_REQUIRE_PRIVATE_PACKAGES:-false}" in
     1|true|TRUE|yes|YES|on|ON) ;;
@@ -123,6 +203,7 @@ prepare_runtime_package_update
 ensure_runtime_library
 install_runtime_cran_dependencies
 run_runtime_package_update
+install_missing_runtime_packages
 verify_runtime_packages
 drop_runtime_tokens
 Rscript task.R
