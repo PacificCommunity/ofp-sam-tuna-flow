@@ -76,7 +76,7 @@ flow_assessment_label <- trimws(paste(flow_species, flow_assessment_year))
 flow_species_slug <- tolower(gsub("[^A-Za-z0-9]+", "-", flow_species))
 flow_task_prefix <- flow_env_any(
   c("FLOW_TASK_PREFIX", "TUNA_FLOW_TASK_PREFIX"),
-  paste0(flow_species_slug, flow_assessment_year)
+  paste(flow_species_slug, flow_assessment_year, sep = "-")
 )
 flow_project_tag <- flow_env_any(c("FLOW_PROJECT_TAG", "TUNA_FLOW_PROJECT_TAG"), "tuna-flow")
 flow_flow_group <- paste(flow_project_tag, flow_species_slug, format(Sys.time(), "%Y%m%d-%H%M%S"), sep = "-")
@@ -463,6 +463,11 @@ common_env <- function(rows) {
   rows$FLOW_SPECIES_LABEL <- if ("FLOW_SPECIES_LABEL" %in% names(rows)) rows$FLOW_SPECIES_LABEL else flow_species_label
   rows$FLOW_ASSESSMENT_YEAR <- if ("FLOW_ASSESSMENT_YEAR" %in% names(rows)) rows$FLOW_ASSESSMENT_YEAR else flow_assessment_year
   rows$FLOW_TASK_PREFIX <- if ("FLOW_TASK_PREFIX" %in% names(rows)) rows$FLOW_TASK_PREFIX else flow_task_prefix
+  rows$KFLOW_RUNTIME_REQUIRE_PRIVATE_PACKAGES <- if ("KFLOW_RUNTIME_REQUIRE_PRIVATE_PACKAGES" %in% names(rows)) {
+    rows$KFLOW_RUNTIME_REQUIRE_PRIVATE_PACKAGES
+  } else {
+    "true"
+  }
   rows$MODEL_KEY <- if ("MODEL_KEY" %in% names(rows)) rows$MODEL_KEY else rows$JOB_KEY
   rows$MODEL_TOKEN <- if ("MODEL_TOKEN" %in% names(rows)) rows$MODEL_TOKEN else rows$RUN_LABEL
   rows$MODEL_LABEL <- if ("MODEL_LABEL" %in% names(rows)) rows$MODEL_LABEL else rows$MODEL_TOKEN
@@ -632,12 +637,15 @@ launch_rows_batched <- function(task_code,
 
 register_tasks <- function(...) {
   flow_require_kflowkit()
+  task_paths <- c("base", "sensitivity", "diagnostics", "plot", "report")
   KflowKit::kflow_register_workflow(
-    paths = c("base", "sensitivity", "diagnostics", "plot", "report"),
-    codes = unname(flow_task_codes[c("base", "sensitivity", "diagnostics", "plot", "report")]),
+    paths = task_paths,
+    codes = unname(flow_task_codes[task_paths]),
+    names = unname(flow_task_codes[task_paths]),
     repo = flow_kflow_repo,
     branch = flow_kflow_branch,
-    target_folders = c("base", "sensitivity", "diagnostics", "plot", "report"),
+    target_folders = task_paths,
+    docker_images = rep(flow_docker_image, length(task_paths)),
     checkout = list(mode = "full", paths = list()),
     ...
   )
