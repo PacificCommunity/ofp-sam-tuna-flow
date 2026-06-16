@@ -28,11 +28,25 @@ scan_plot_files <- function(root) {
 }
 
 plot_priority <- function(rel) {
-  if (grepl("(^|/)report-figures/depletion-smoke[.]png$", rel, ignore.case = TRUE)) return(1L)
-  if (grepl("(^|/)depletion-smoke[.]png$", rel, ignore.case = TRUE)) return(2L)
-  if (grepl("(^|/)report-figures/", rel, ignore.case = TRUE)) return(3L)
-  if (grepl("model-exploration-overview[.](png|svg)$", rel, ignore.case = TRUE)) return(4L)
+  if (grepl("(^|/)report-figures/key-quantities-smoke[.]png$", rel, ignore.case = TRUE)) return(1L)
+  if (grepl("(^|/)key-quantities-smoke[.]png$", rel, ignore.case = TRUE)) return(2L)
+  if (grepl("(^|/)report-figures/depletion-smoke[.]png$", rel, ignore.case = TRUE)) return(3L)
+  if (grepl("(^|/)depletion-smoke[.]png$", rel, ignore.case = TRUE)) return(4L)
+  if (grepl("(^|/)report-figures/", rel, ignore.case = TRUE)) return(5L)
+  if (grepl("model-exploration-overview[.](png|svg)$", rel, ignore.case = TRUE)) return(6L)
   20L
+}
+
+figure_label <- function(rel) {
+  stem <- tolower(tools::file_path_sans_ext(basename(rel)))
+  if (identical(stem, "key-quantities-smoke")) {
+    return("Key derived quantities")
+  }
+  if (identical(stem, "depletion-smoke")) {
+    return("Depletion")
+  }
+  label <- gsub("[-_]+", " ", stem)
+  paste0(toupper(substr(label, 1, 1)), substr(label, 2, nchar(label)))
 }
 
 figure_input_roots <- kflow_split(kflow_env("REPORT_FIGURE_INPUT_DIR", ""))
@@ -131,7 +145,9 @@ copied_sources <- character()
 if (nrow(plot_index)) {
   for (index in seq_len(nrow(plot_index))) {
     source_file <- plot_index$file[[index]]
-    target <- if (index == 1L && grepl("depletion-smoke[.]png$", source_file, ignore.case = TRUE)) {
+    target <- if (index == 1L && grepl("key-quantities-smoke[.]png$", source_file, ignore.case = TRUE)) {
+      "key-quantities-smoke.png"
+    } else if (index == 1L && grepl("depletion-smoke[.]png$", source_file, ignore.case = TRUE)) {
       "depletion-smoke.png"
     } else {
       sprintf("plot-%03d.%s", index, tools::file_ext(source_file))
@@ -211,7 +227,7 @@ if (kflow_bool("REPORT_REWRITE_FIGURES", rewrite_figures_default)) {
       "",
       unlist(lapply(seq_along(copied), function(index) {
         c(
-          sprintf("## Kflow figure %s", index),
+          sprintf("## %s", figure_label(copied_sources[[index]])),
           "",
           sprintf("![](%s){#fig-kflow-%03d fig-align=\"center\" width=100%%}", copied[[index]], index),
           ""

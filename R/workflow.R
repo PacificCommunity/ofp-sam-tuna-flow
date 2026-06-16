@@ -396,43 +396,43 @@ diagnostics_runs <- rbind(
 )
 
 plot_runs <- data.frame(
-  RUN_LABEL = "plot-depletion-smoke",
-  JOB_KEY = "plot-depletion-smoke",
-  MODEL_KEY = "plot-depletion-smoke",
-  MODEL_TOKEN = "PlotDepletionSmoke",
-  MODEL_NAME = paste(flow_assessment_label, "depletion smoke plot package"),
+  RUN_LABEL = "plot-key-quantities-smoke",
+  JOB_KEY = "plot-key-quantities-smoke",
+  MODEL_KEY = "plot-key-quantities-smoke",
+  MODEL_TOKEN = "PlotKeyQuantitiesSmoke",
+  MODEL_NAME = paste(flow_assessment_label, "key quantities smoke plot package"),
   BASE_MODEL_KEY = flow_base_job_key,
   CHANGE_TOKEN = "Plot",
   CHANGE_GROUP = "plot",
-  CHANGE_SUMMARY = "Collects selected smoke outputs into a simple depletion plot package.",
-  JOB_TITLE = "Plot: depletion smoke",
-  JOB_DESCRIPTION = "Creates a simple depletion plot from selected model and diagnostics outputs.",
+  CHANGE_SUMMARY = "Collects selected smoke outputs into a key derived quantities plot package.",
+  JOB_TITLE = "Plot: key quantities smoke",
+  JOB_DESCRIPTION = "Creates key derived quantity plots from selected model and diagnostics outputs.",
   INPUT_TASK = flow_task_codes[["diagnostics"]],
   INPUT_KEY = paste(diagnostics_runs$JOB_KEY, collapse = ","),
-  PLOT_TITLE = paste(flow_assessment_label, "depletion smoke check"),
+  PLOT_TITLE = paste(flow_assessment_label, "key quantities smoke check"),
   PLOT_BACKEND = "mfclshiny",
   MFCLSHINY_SCRIPT = "hooks/depletion_smoke.R",
-  MODEL_LABEL = "Depletion smoke",
-  PLOT_LABEL = "Depletion",
-  REPORT_LABEL = "Depletion smoke plots",
+  MODEL_LABEL = "Key quantities smoke",
+  PLOT_LABEL = "Key quantities",
+  REPORT_LABEL = "Key derived quantity plots",
   stringsAsFactors = FALSE
 )
 
 report_runs <- data.frame(
-  RUN_LABEL = "report-depletion-smoke",
-  JOB_KEY = "report-depletion-smoke",
-  MODEL_KEY = "report-depletion-smoke",
-  MODEL_TOKEN = "ReportDepletionSmoke",
-  MODEL_NAME = paste(flow_assessment_label, "depletion smoke Quarto report"),
+  RUN_LABEL = "report-key-quantities-smoke",
+  JOB_KEY = "report-key-quantities-smoke",
+  MODEL_KEY = "report-key-quantities-smoke",
+  MODEL_TOKEN = "ReportKeyQuantitiesSmoke",
+  MODEL_NAME = paste(flow_assessment_label, "key quantities Quarto report"),
   BASE_MODEL_KEY = flow_base_job_key,
   CHANGE_TOKEN = "Report",
   CHANGE_GROUP = "report",
-  CHANGE_SUMMARY = "Renders the selected depletion smoke plot into a Quarto PDF report.",
-  JOB_TITLE = paste("Report:", flow_species, "depletion smoke"),
-  JOB_DESCRIPTION = "Renders a Quarto report from the selected depletion smoke plot.",
+  CHANGE_SUMMARY = "Renders the selected key derived quantity plot into a Quarto PDF report.",
+  JOB_TITLE = paste("Report:", flow_species, "key quantities smoke"),
+  JOB_DESCRIPTION = "Renders a Quarto report from the selected key derived quantity plot.",
   INPUT_TASK = flow_task_codes[["plot"]],
-  INPUT_KEY = "plot-depletion-smoke",
-  REPORT_TITLE = paste(flow_assessment_label, "Kflow depletion smoke report"),
+  INPUT_KEY = "plot-key-quantities-smoke",
+  REPORT_TITLE = paste(flow_assessment_label, "key quantities smoke report"),
   REPORT_FILE_STEM = flow_report_file_stem,
   REPORT_SOURCE_REPO = flow_report_repo,
   REPORT_SOURCE_REF = flow_report_ref,
@@ -443,9 +443,9 @@ report_runs <- data.frame(
   REPORT_REQUIRE_PLOTS = "true",
   REPORT_REWRITE_FIGURES = "true",
   REPORT_REWRITE_TABLES = "true",
-  MODEL_LABEL = "Depletion smoke report",
+  MODEL_LABEL = "Key quantities smoke report",
   PLOT_LABEL = "Report",
-  REPORT_LABEL = "Depletion smoke report",
+  REPORT_LABEL = "Key quantities smoke report",
   stringsAsFactors = FALSE
 )
 
@@ -473,7 +473,10 @@ runtime_package_specs <- function(backend, stage = "", plot_backend = "", mfclsh
   if (identical(backend, "mfclrtmb")) {
     return(paste(c(specs[["mfclrtmb"]], specs[["mfclkit"]]), collapse = ","))
   }
-  if (backend %in% c("mfcl_exe", "mfcl_smoke")) {
+  if (identical(backend, "mfcl_smoke")) {
+    return(paste(c(specs[["mfclkit"]], specs[["mfclshiny"]]), collapse = ","))
+  }
+  if (identical(backend, "mfcl_exe")) {
     return(specs[["mfclkit"]])
   }
   "none"
@@ -507,6 +510,16 @@ common_env <- function(rows) {
   rows$SMOKE_INPUT_PAR <- if ("SMOKE_INPUT_PAR" %in% names(rows)) rows$SMOKE_INPUT_PAR else "last"
   rows$SMOKE_OUTPUT_PAR <- if ("SMOKE_OUTPUT_PAR" %in% names(rows)) rows$SMOKE_OUTPUT_PAR else ""
   rows$SMOKE_FEVALS <- if ("SMOKE_FEVALS" %in% names(rows)) rows$SMOKE_FEVALS else "1"
+  rows$KFLOW_REQUIRE_MFCL_DERIVED <- if ("KFLOW_REQUIRE_MFCL_DERIVED" %in% names(rows)) {
+    rows$KFLOW_REQUIRE_MFCL_DERIVED
+  } else {
+    ifelse(tolower(rows$MFCL_BACKEND) == "mfcl_smoke", "true", "false")
+  }
+  rows$KFLOW_REQUIRE_KEY_QUANTITIES <- if ("KFLOW_REQUIRE_KEY_QUANTITIES" %in% names(rows)) {
+    rows$KFLOW_REQUIRE_KEY_QUANTITIES
+  } else {
+    ifelse(tolower(rows$MFCL_BACKEND) == "mfcl_smoke", "true", "false")
+  }
   rows$INPUT_RECIPE_REMOVE_START_FILES <- if ("INPUT_RECIPE_REMOVE_START_FILES" %in% names(rows)) {
     rows$INPUT_RECIPE_REMOVE_START_FILES
   } else {

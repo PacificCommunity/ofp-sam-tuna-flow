@@ -594,6 +594,113 @@ kflow_try_build_mfclshiny_payload <- function(model_dir, out_dir, log_file = NUL
   file.exists(payload_file)
 }
 
+kflow_mfclshiny_payload_env <- function() {
+  if (!requireNamespace("mfclshiny", quietly = TRUE)) {
+    return(NULL)
+  }
+  factory <- tryCatch(
+    get("mfclshiny_payload_env", envir = asNamespace("mfclshiny"), inherits = FALSE),
+    error = function(e) NULL
+  )
+  if (is.function(factory)) {
+    return(tryCatch(factory(), error = function(e) NULL))
+  }
+
+  tool <- system.file("app", "tools", "model_payload.R", package = "mfclshiny")
+  if (!nzchar(tool) || !file.exists(tool)) {
+    return(NULL)
+  }
+  env <- new.env(parent = asNamespace("mfclshiny"))
+  tryCatch({
+    sys.source(tool, envir = env, keep.source = FALSE)
+    env
+  }, error = function(e) NULL)
+}
+
+kflow_extract_payload_timeseries <- function(payload_file, stage, input_par = "", output_par = "", log_file = NULL) {
+  if (!file.exists(payload_file)) {
+    return(data.frame())
+  }
+  payload <- tryCatch(readRDS(payload_file), error = function(e) NULL)
+  rep_obj <- tryCatch(payload$data$RepOut, error = function(e) NULL)
+  if (is.null(rep_obj)) {
+    return(data.frame())
+  }
+
+  env <- kflow_mfclshiny_payload_env()
+  if (is.null(env) || !is.function(env$mp_extract_rep_timeseries)) {
+    return(data.frame())
+  }
+
+  scenario <- kflow_env("PLOT_LABEL", kflow_env("MODEL_TOKEN", kflow_env("RUN_LABEL", "Model")))
+  out <- tryCatch(
+    env$mp_extract_rep_timeseries(rep_obj, scenario = scenario),
+    error = function(e) {
+      kflow_note("Could not extract MFCL payload timeseries: ", conditionMessage(e), log_file = log_file)
+      NULL
+    }
+  )
+  if (is.null(out) || !nrow(out)) {
+    return(data.frame())
+  }
+
+  out <- as.data.frame(out, stringsAsFactors = FALSE)
+  out$year <- suppressWarnings(as.numeric(out$year))
+  out$depletion <- suppressWarnings(as.numeric(out$depletion))
+  out <- out[is.finite(out$year) & is.finite(out$depletion), , drop = FALSE]
+  if (!nrow(out)) {
+    return(data.frame())
+  }
+
+  for (name in intersect(c("spawning_potential", "recruitment", "fishing_mortality"), names(out))) {
+    out[[name]] <- suppressWarnings(as.numeric(out[[name]]))
+  }
+  if (!"region" %in% names(out)) {
+    out$region <- "All"
+  }
+  out$stage <- stage
+  out$model_key <- kflow_env("MODEL_KEY", kflow_env("JOB_KEY", ""))
+  out$model_token <- kflow_env("MODEL_TOKEN", kflow_env("RUN_LABEL", ""))
+  out$model_label <- kflow_env("MODEL_LABEL", out$model_token[[1]])
+  out$plot_label <- kflow_env("PLOT_LABEL", out$model_token[[1]])
+  out$report_label <- kflow_env("REPORT_LABEL", out$model_label[[1]])
+  out$change_token <- kflow_env("CHANGE_TOKEN", out$model_token[[1]])
+  out$change_group <- kflow_env("CHANGE_GROUP", "")
+  out$change_detail <- kflow_env("CHANGE_DETAIL", kflow_env("CHANGE_SUMMARY", ""))
+  out$parent_model_key <- kflow_env("PARENT_MODEL_KEY", kflow_env("BASE_MODEL_KEY", ""))
+  out$parent_model_token <- kflow_env("PARENT_MODEL_TOKEN", "")
+  out$recipe_token <- kflow_env("RECIPE_TOKEN", out$change_token[[1]])
+  out$recipe_family <- kflow_env("RECIPE_FAMILY", kflow_env("CHANGE_GROUP", ""))
+  out$recipe_label <- kflow_env("RECIPE_LABEL", out$change_token[[1]])
+  out$source <- "mfcl_payload_rep_timeseries"
+  out$derived_source <- "mfcl_payload_rep_timeseries"
+  out$smoke_input_par <- input_par
+  out$smoke_output_par <- output_par
+  out$payload_file <- basename(payload_file)
+  out
+}
+
+kflow_assert_key_quantities <- function(data, context = "MFCL payload") {
+  if (!nrow(data) || !"depletion" %in% names(data)) {
+    stop(context, " did not provide depletion timeseries.", call. = FALSE)
+  }
+  if (!kflow_bool("KFLOW_REQUIRE_KEY_QUANTITIES", FALSE)) {
+    return(invisible(TRUE))
+  }
+  required <- c("spawning_potential", "recruitment", "fishing_mortality")
+  missing <- required[!vapply(required, function(name) {
+    name %in% names(data) && any(is.finite(suppressWarnings(as.numeric(data[[name]]))))
+  }, logical(1))]
+  if (length(missing)) {
+    stop(
+      context, " did not provide required key derived quantities: ",
+      paste(missing, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
+}
+
 kflow_read_csv_file <- function(file) {
   if (!file.exists(file)) {
     return(data.frame())
@@ -762,7 +869,27 @@ kflow_run_mfcl_smoke <- function(source_dir, out_dir, stage, log_file = NULL) {
   )
   utils::write.csv(smoke, file.path(model_dir, "mfcl-smoke-summary.csv"), row.names = FALSE)
   utils::write.csv(smoke, file.path(out_dir, "mfcl-smoke-summary.csv"), row.names = FALSE)
-  depletion <- kflow_write_smoke_depletion(model_dir, stage)
+  payload_timeseries <- kflow_extract_payload_timeseries(
+    file.path(model_dir, "model_payload.rds"),
+    stage = stage,
+    input_par = input_par,
+    output_par = output_par_name,
+    log_file = log_file
+  )
+  if (nrow(payload_timeseries)) {
+    kflow_assert_key_quantities(payload_timeseries, context = "MFCL payload")
+    depletion <- payload_timeseries
+    utils::write.csv(depletion, file.path(model_dir, "depletion-smoke.csv"), row.names = FALSE)
+    kflow_note("Wrote MFCL payload-derived key quantities from ", output_par_name, ".", log_file = log_file)
+  } else if (kflow_bool("KFLOW_REQUIRE_MFCL_DERIVED", FALSE)) {
+    stop("MFCL smoke completed but no payload-derived timeseries were available.", call. = FALSE)
+  } else {
+    depletion <- kflow_write_smoke_depletion(model_dir, stage)
+    depletion$derived_source <- "synthetic_smoke_fallback"
+    depletion$smoke_input_par <- input_par
+    depletion$smoke_output_par <- output_par_name
+    utils::write.csv(depletion, file.path(model_dir, "depletion-smoke.csv"), row.names = FALSE)
+  }
   utils::write.csv(depletion, file.path(out_dir, "depletion-smoke.csv"), row.names = FALSE)
   kflow_write_manifest(model_dir, file.path(model_dir, "model-manifest.csv"))
   invisible(smoke)
@@ -780,6 +907,9 @@ kflow_run_diagnostics_smoke <- function(source_dir, out_dir, stage = "diagnostic
   if (nrow(depletion)) {
     parent <- depletion
     parent$model_role <- "parent"
+    if (!"derived_source" %in% names(parent)) {
+      parent$derived_source <- "upstream"
+    }
     diagnostic <- depletion
     diagnostic$stage <- stage
     diagnostic$model_key <- kflow_env("MODEL_KEY", kflow_env("JOB_KEY", ""))
@@ -795,13 +925,24 @@ kflow_run_diagnostics_smoke <- function(source_dir, out_dir, stage = "diagnostic
     diagnostic$recipe_family <- kflow_env("RECIPE_FAMILY", kflow_env("CHANGE_GROUP", ""))
     diagnostic$recipe_label <- kflow_env("RECIPE_LABEL", diagnostic$change_token[[1]])
     diagnostic$source <- "diagnostics_smoke_from_parent"
+    diagnostic$derived_source <- "diagnostics_smoke_from_parent"
     diagnostic$model_role <- "diagnostics"
     diagnostic$depletion <- round(pmax(0.05, pmin(0.95, as.numeric(diagnostic$depletion) + 0.005)), 3)
+    if ("spawning_potential" %in% names(diagnostic)) {
+      diagnostic$spawning_potential <- round(suppressWarnings(as.numeric(diagnostic$spawning_potential)) * 1.005, 6)
+    }
+    if ("recruitment" %in% names(diagnostic)) {
+      diagnostic$recruitment <- round(suppressWarnings(as.numeric(diagnostic$recruitment)) * 0.995, 6)
+    }
+    if ("fishing_mortality" %in% names(diagnostic)) {
+      diagnostic$fishing_mortality <- round(suppressWarnings(as.numeric(diagnostic$fishing_mortality)) * 1.005, 6)
+    }
     depletion <- rbind(parent, diagnostic)
     utils::write.csv(depletion, file.path(model_dir, "depletion-smoke.csv"), row.names = FALSE)
   } else {
     depletion <- kflow_write_smoke_depletion(model_dir, stage)
     depletion$model_role <- "diagnostics"
+    depletion$derived_source <- "synthetic_diagnostics_smoke_fallback"
     utils::write.csv(depletion, file.path(model_dir, "depletion-smoke.csv"), row.names = FALSE)
   }
   utils::write.csv(depletion, file.path(out_dir, "depletion-smoke.csv"), row.names = FALSE)

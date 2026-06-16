@@ -1,6 +1,6 @@
 input_dir <- Sys.getenv("KFLOW_INPUT_DIR", "inputs")
 out_dir <- Sys.getenv("KFLOW_OUT_DIR", "outputs")
-plot_title <- Sys.getenv("PLOT_TITLE", "Tuna depletion smoke check")
+plot_title <- Sys.getenv("PLOT_TITLE", "Tuna key quantities smoke check")
 
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -23,7 +23,9 @@ read_one <- function(file) {
 }
 depletion <- do.call(rbind, lapply(depletion_files, read_one))
 depletion$year <- suppressWarnings(as.integer(depletion$year))
-depletion$depletion <- suppressWarnings(as.numeric(depletion$depletion))
+for (name in intersect(c("depletion", "spawning_potential", "recruitment", "fishing_mortality"), names(depletion))) {
+  depletion[[name]] <- suppressWarnings(as.numeric(depletion[[name]]))
+}
 depletion <- depletion[is.finite(depletion$year) & is.finite(depletion$depletion), , drop = FALSE]
 dedupe_columns <- setdiff(names(depletion), "source_file")
 depletion <- depletion[!duplicated(depletion[dedupe_columns]), , drop = FALSE]
@@ -34,9 +36,10 @@ if (!"report_label" %in% names(depletion)) {
   depletion$report_label <- depletion$plot_label
 }
 utils::write.csv(depletion, file.path(out_dir, "depletion-smoke-combined.csv"), row.names = FALSE)
+utils::write.csv(depletion, file.path(out_dir, "key-quantities-combined.csv"), row.names = FALSE)
 
-plot_file <- file.path(out_dir, "model-exploration-overview.svg")
-png_file <- file.path(out_dir, "depletion-smoke.png")
+plot_file <- file.path(out_dir, "key-quantities-smoke.svg")
+png_file <- file.path(out_dir, "key-quantities-smoke.png")
 report_figure_dir <- file.path(out_dir, "report-figures")
 dir.create(report_figure_dir, recursive = TRUE, showWarnings = FALSE)
 mfclshiny_status <- "not_available"
@@ -49,13 +52,13 @@ if (isTRUE(package_status$available[package_status$package == "mfclshiny"]) &&
       data = depletion,
       output_dir = mfclshiny_figure_dir,
       title = plot_title,
-      figure_basename = "model-exploration-overview",
+      figure_basename = "key-quantities-smoke",
       formats = c("png", "pdf", "svg"),
       build_payloads = FALSE,
       overwrite = TRUE
     )
-    svg_src <- file.path(mfclshiny_figure_dir, "model-exploration-overview.svg")
-    png_src <- file.path(mfclshiny_figure_dir, "model-exploration-overview.png")
+    svg_src <- file.path(mfclshiny_figure_dir, "key-quantities-smoke.svg")
+    png_src <- file.path(mfclshiny_figure_dir, "key-quantities-smoke.png")
     if (file.exists(svg_src)) {
       invisible(file.copy(svg_src, plot_file, overwrite = TRUE))
     }
@@ -90,7 +93,7 @@ if ((!file.exists(plot_file) || !file.exists(png_file)) && requireNamespace("ggp
     ggplot2::scale_y_continuous(labels = function(x) paste0(round(x * 100), "%"), limits = c(0, 1)) +
     ggplot2::labs(
       title = plot_title,
-      subtitle = "Smoke-run depletion trace for checking the Kflow dependency path",
+      subtitle = "Smoke-run depletion trace; full key quantities require MFCL payload extraction",
       x = NULL,
       y = "Depletion",
       colour = "Model"
@@ -131,10 +134,10 @@ if (!file.exists(png_file) && file.exists(plot_file) && requireNamespace("rsvg",
   rsvg::rsvg_png(plot_file, png_file, width = 1600, height = 800)
 }
 if (file.exists(png_file)) {
-  file.copy(png_file, file.path(report_figure_dir, "depletion-smoke.png"), overwrite = TRUE)
+  file.copy(png_file, file.path(report_figure_dir, "key-quantities-smoke.png"), overwrite = TRUE)
 }
 if (file.exists(plot_file)) {
-  file.copy(plot_file, file.path(report_figure_dir, "model-exploration-overview.svg"), overwrite = TRUE)
+  file.copy(plot_file, file.path(report_figure_dir, "key-quantities-smoke.svg"), overwrite = TRUE)
 }
 
 summary <- stats::aggregate(
@@ -144,9 +147,16 @@ summary <- stats::aggregate(
 )
 names(summary)[names(summary) == "depletion"] <- "mean_depletion"
 summary$plot_file <- basename(plot_file)
-summary$report_figure <- if (file.exists(file.path(report_figure_dir, "depletion-smoke.png"))) {
+report_figures <- list.files(report_figure_dir, pattern = "[.]png$", recursive = TRUE, full.names = FALSE)
+report_figures <- sort(file.path("report-figures", report_figures))
+summary$report_figure <- if ("report-figures/key-quantities-smoke.png" %in% report_figures) {
+  "report-figures/key-quantities-smoke.png"
+} else if ("report-figures/depletion-smoke.png" %in% report_figures) {
   "report-figures/depletion-smoke.png"
+} else if (length(report_figures)) {
+  report_figures[[1]]
 } else {
   ""
 }
+summary$report_figures <- paste(report_figures, collapse = ",")
 utils::write.csv(summary, file.path(out_dir, "depletion-plot-summary.csv"), row.names = FALSE)

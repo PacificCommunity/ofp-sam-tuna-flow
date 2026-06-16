@@ -67,6 +67,31 @@ report_figure <- if (file.exists(file.path(ctx$out_dir, "report-figures", "deple
 } else {
   ""
 }
+report_figure_dir <- file.path(ctx$out_dir, "report-figures")
+report_figures <- if (dir.exists(report_figure_dir)) {
+  file.path(
+    "report-figures",
+    list.files(report_figure_dir, pattern = "[.]png$", recursive = TRUE, full.names = FALSE, ignore.case = TRUE)
+  )
+} else {
+  character()
+}
+figure_priority <- function(path) {
+  if (grepl("key-quantities-smoke[.]png$", path, ignore.case = TRUE)) return(1L)
+  if (grepl("depletion-smoke[.]png$", path, ignore.case = TRUE)) return(2L)
+  20L
+}
+report_figures <- report_figures[order(vapply(report_figures, figure_priority, integer(1)), report_figures)]
+if (length(report_figures)) {
+  report_figure <- report_figures[[1L]]
+}
+plot_file <- if (file.exists(file.path(ctx$out_dir, "key-quantities-smoke.svg"))) {
+  "key-quantities-smoke.svg"
+} else if (file.exists(file.path(ctx$out_dir, "model-exploration-overview.svg"))) {
+  "model-exploration-overview.svg"
+} else {
+  ""
+}
 plot_summary <- data.frame(
   run_label = kflow_env("RUN_LABEL", ""),
   job_key = kflow_env("JOB_KEY", ""),
@@ -75,8 +100,9 @@ plot_summary <- data.frame(
   input_registry_rows = nrow(registries),
   input_summary_rows = nrow(summaries),
   input_manifest_rows = nrow(manifests),
-  plot_file = "model-exploration-overview.svg",
+  plot_file = plot_file,
   report_figure = report_figure,
+  report_figures = paste(report_figures, collapse = ","),
   stringsAsFactors = FALSE
 )
 utils::write.csv(plot_summary, file.path(ctx$out_dir, "plot-summary.csv"), row.names = FALSE)
@@ -84,7 +110,7 @@ writeLines(capture.output(print(plot_summary)), file.path(ctx$out_dir, "plot-sum
 kflow_write_registry(ctx$out_dir, "plot")
 kflow_write_summary(ctx$out_dir, "plot")
 plot_keep <- c("plot-summary.csv", "model-registry.csv")
-plot_keep <- c(plot_keep, if (nzchar(report_figure)) report_figure else "model-exploration-overview.svg")
+plot_keep <- c(plot_keep, if (length(report_figures)) report_figures else if (nzchar(plot_file)) plot_file else character())
 kflow_compact_outputs(
   ctx$out_dir,
   keep = plot_keep
