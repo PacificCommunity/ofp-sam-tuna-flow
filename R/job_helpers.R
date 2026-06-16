@@ -84,42 +84,106 @@ kflow_run_shell <- function(command, workdir = getwd(), log_file = NULL, sanitiz
   invisible(TRUE)
 }
 
-kflow_clone_source <- function(work_dir = "work/source", log_file = NULL) {
-  source_repo <- kflow_env("SOURCE_REPO", kflow_env("FLOW_SOURCE_REPO", "PacificCommunity/ofp-sam-bet2026-inputs"))
-  source_ref <- kflow_env("SOURCE_REF", kflow_env("FLOW_SOURCE_REF", "main"))
-  source_url <- sprintf("https://github.com/%s.git", source_repo)
+kflow_github_token_env_name <- function() {
+  names <- c("GITHUB_PAT", "GIT_PAT", "GH_TOKEN", "KFLOW_GITHUB_TOKEN", "KFLOW_PERSONAL_TOKEN")
+  hits <- names[nzchar(Sys.getenv(names, unset = ""))]
+  if (length(hits)) hits[[1L]] else ""
+}
+
+kflow_github_clone_url <- function(repo) {
+  if (grepl("^(https?|git)://|^git@", repo)) {
+    return(repo)
+  }
+  sprintf("https://github.com/%s.git", repo)
+}
+
+kflow_git_auth_args <- function() {
+  token_name <- kflow_github_token_env_name()
+  if (!nzchar(token_name)) {
+    return("")
+  }
+  sprintf("-c http.extraheader=\"Authorization: Bearer ${%s}\"", token_name)
+}
+
+kflow_clone_github_repo <- function(repo, ref = "main", work_dir = "work/source", log_file = NULL) {
+  source_url <- kflow_github_clone_url(repo)
+  auth_args <- kflow_git_auth_args()
   unlink(work_dir, recursive = TRUE, force = TRUE)
   dir.create(dirname(work_dir), recursive = TRUE, showWarnings = FALSE)
 
-  clone_branch <- if (nzchar(source_ref)) {
-    sprintf(
-      "git clone --depth 1 --branch %s %s %s",
-      shQuote(source_ref), shQuote(source_url), shQuote(work_dir)
-    )
-  } else {
-    sprintf("git clone --depth 1 %s %s", shQuote(source_url), shQuote(work_dir))
-  }
-  ok <- tryCatch({
-    kflow_run_shell(clone_branch, log_file = log_file)
-    TRUE
-  }, error = function(e) {
-    kflow_note("Branch/tag clone failed, retrying with checkout: ", conditionMessage(e), log_file = log_file)
-    FALSE
-  })
+  git_cmds <- if (nzchar(auth_args)) c(paste("git", auth_args), "git -c credential.helper=") else "git"
+  git_cmds <- unique(git_cmds)
+  clone_error <- NULL
+  ok <- FALSE
 
-  if (!isTRUE(ok)) {
+  for (git_cmd in git_cmds) {
     unlink(work_dir, recursive = TRUE, force = TRUE)
-    kflow_run_shell(
-      sprintf("git clone --depth 1 %s %s", shQuote(source_url), shQuote(work_dir)),
-      log_file = log_file
-    )
-    if (nzchar(source_ref)) {
-      kflow_run_shell(sprintf("git fetch --depth 1 origin %s || true", shQuote(source_ref)), workdir = work_dir, log_file = log_file)
-      kflow_run_shell(sprintf("git checkout %s", shQuote(source_ref)), workdir = work_dir, log_file = log_file)
+    clone_branch <- if (nzchar(ref)) {
+      sprintf(
+        "%s clone --depth 1 --branch %s %s %s",
+        git_cmd, shQuote(ref), shQuote(source_url), shQuote(work_dir)
+      )
+    } else {
+      sprintf("%s clone --depth 1 %s %s", git_cmd, shQuote(source_url), shQuote(work_dir))
+    }
+    ok <- tryCatch({
+      kflow_run_shell(clone_branch, log_file = log_file)
+      TRUE
+    }, error = function(e) {
+      clone_error <<- e
+      kflow_note("Branch/tag clone failed: ", conditionMessage(e), log_file = log_file)
+      FALSE
+    })
+    if (isTRUE(ok)) {
+      break
     }
   }
 
+  if (!isTRUE(ok)) {
+    kflow_note("Retrying clone without branch checkout.", log_file = log_file)
+    for (git_cmd in git_cmds) {
+      unlink(work_dir, recursive = TRUE, force = TRUE)
+      ok <- tryCatch({
+        kflow_run_shell(
+          sprintf("%s clone --depth 1 %s %s", git_cmd, shQuote(source_url), shQuote(work_dir)),
+          log_file = log_file
+        )
+        TRUE
+      }, error = function(e) {
+        clone_error <<- e
+        kflow_note("Clone failed: ", conditionMessage(e), log_file = log_file)
+        FALSE
+      })
+      if (!isTRUE(ok)) {
+        next
+      }
+      if (nzchar(ref)) {
+        kflow_run_shell(sprintf("%s fetch --depth 1 origin %s || true", git_cmd, shQuote(ref)), workdir = work_dir, log_file = log_file)
+        kflow_run_shell(sprintf("%s checkout %s", git_cmd, shQuote(ref)), workdir = work_dir, log_file = log_file)
+      }
+      break
+    }
+  }
+
+  if (!isTRUE(ok)) {
+    stop(conditionMessage(clone_error), call. = FALSE)
+  }
+
+  if (nzchar(ref) && dir.exists(work_dir)) {
+    kflow_run_shell(
+      sprintf("git rev-parse --is-inside-work-tree >/dev/null"),
+      workdir = work_dir,
+      log_file = log_file
+    )
+  }
+
   normalizePath(work_dir, winslash = "/", mustWork = TRUE)
+}
+
+kflow_clone_source <- function(work_dir = "work/source", log_file = NULL) {
+  source_repo <- kflow_env("SOURCE_REPO", kflow_env("FLOW_SOURCE_REPO", "PacificCommunity/ofp-sam-bet2026-inputs"))
+  source_ref <- kflow_env("SOURCE_REF", kflow_env("FLOW_SOURCE_REF", "main"))
+  kflow_clone_github_repo(source_repo, source_ref, work_dir = work_dir, log_file = log_file)
 }
 
 kflow_prepare_source_path <- function(source_path, work_dir = "work/source", log_file = NULL) {

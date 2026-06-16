@@ -1,7 +1,7 @@
 name: tuna-flow-plot
 description: Combine selected tuna assessment outputs and create model exploration plots.
 command: bash run.sh
-docker_image: ghcr.io/pacificcommunity/tuna-flow:v1.2
+docker_image: ghcr.io/pacificcommunity/tuna-flow:latest
 resources:
   cpus: 2
   memory: 12GB

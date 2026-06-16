@@ -18,6 +18,12 @@ plan_task_code <- function(stage) {
   }
   species <- tolower(Sys.getenv("FLOW_SPECIES", Sys.getenv("TUNA_FLOW_SPECIES", "tuna")))
   year <- Sys.getenv("FLOW_ASSESSMENT_YEAR", Sys.getenv("TUNA_FLOW_ASSESSMENT_YEAR", ""))
+  if (identical(stage, "report")) {
+    return(Sys.getenv(
+      "FLOW_REPORT_TASK_CODE",
+      Sys.getenv("TUNA_FLOW_REPORT_TASK_CODE", paste0("ofp-sam-", species, year, "-report"))
+    ))
+  }
   prefix <- Sys.getenv("FLOW_TASK_PREFIX", Sys.getenv("TUNA_FLOW_TASK_PREFIX", paste0(species, year)))
   paste(prefix, stage, sep = "-")
 }

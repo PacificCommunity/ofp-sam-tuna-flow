@@ -10,11 +10,14 @@ using:
 - `PacificCommunity/ofp-sam-bet2026-inputs`
 - `mfcl/inputs/2023_4region_1007`
 - `/home/mfcl/mfclo64` from the Docker image
-- `ghcr.io/pacificcommunity/tuna-flow:v1.2`
+- `ghcr.io/pacificcommunity/tuna-flow:latest`
 
 The starter flow runs one base model, several explicit sensitivity recipes
 (`FixM`, `FixVB`, `Sel4`, `IndexCvHalf`), jitter-style diagnostics, a depletion
-figure, and a Quarto report.
+figure, and a Quarto report. The report task is registered separately as
+`ofp-sam-bet2026-report` and renders from
+`PacificCommunity/ofp-sam-2026-BET-report`, so it can be rerun on existing
+figures without relaunching model or plot jobs.
 
 Start here:
 

@@ -1,7 +1,7 @@
-name: tuna-flow-report
-description: Render a Quarto report from selected tuna assessment plot outputs.
+name: ofp-sam-bet2026-report
+description: Render the BET 2026 assessment report from selected Kflow figures or a report repo checkout.
 command: bash run.sh
-docker_image: ghcr.io/pacificcommunity/tuna-flow:v1.2
+docker_image: ghcr.io/pacificcommunity/tuna-flow:latest
 resources:
   cpus: 2
   memory: 12GB
@@ -76,7 +76,18 @@ job_config:
     - MFCLSHINY_SCRIPT
     - REPORT_TITLE
     - REPORT_FILE_STEM
+    - REPORT_SOURCE_REPO
+    - REPORT_SOURCE_REF
+    - REPORT_SOURCE_PATH
+    - REPORT_MAIN
     - REPORT_TEMPLATE_DIR
     - REPORT_TEMPLATE_MAIN
     - REPORT_RENDER_FORMAT
+    - REPORT_RENDER_COMMAND
+    - REPORT_OUTPUT_FILE
+    - REPORT_FIGURE_INPUT_DIR
+    - REPORT_FIGURE_DIR
+    - REPORT_COPY_FIGURE_TREE
     - REPORT_REQUIRE_PLOTS
+    - REPORT_REWRITE_FIGURES
+    - REPORT_REWRITE_TABLES

@@ -85,13 +85,21 @@ flow_kflow_branch <- flow_env_any(c("FLOW_KFLOW_BRANCH", "TUNA_FLOW_BRANCH"), "m
 flow_source_repo <- flow_env_any(c("FLOW_SOURCE_REPO", "TUNA_FLOW_SOURCE_REPO"), "PacificCommunity/ofp-sam-bet2026-inputs")
 flow_source_ref <- flow_env_any(c("FLOW_SOURCE_REF", "TUNA_FLOW_SOURCE_REF"), "main")
 flow_source_path <- flow_env_any(c("FLOW_SOURCE_PATH", "TUNA_FLOW_SOURCE_PATH", "SOURCE_PATH"), "")
+flow_report_repo <- flow_env_any(c("FLOW_REPORT_REPO", "TUNA_FLOW_REPORT_REPO"), "PacificCommunity/ofp-sam-2026-BET-report")
+flow_report_ref <- flow_env_any(c("FLOW_REPORT_REF", "TUNA_FLOW_REPORT_REF"), "main")
+flow_report_path <- flow_env_any(c("FLOW_REPORT_PATH", "TUNA_FLOW_REPORT_PATH"), "report")
+flow_report_main <- flow_env_any(c("FLOW_REPORT_MAIN", "TUNA_FLOW_REPORT_MAIN"), "bet-2026.qmd")
 flow_docker_image <- flow_env_any(
   c("FLOW_DOCKER_IMAGE", "TUNA_FLOW_DOCKER_IMAGE"),
-  "ghcr.io/pacificcommunity/tuna-flow:v1.2"
+  "ghcr.io/pacificcommunity/tuna-flow:latest"
 )
 flow_task_codes <- setNames(paste(flow_task_prefix, c("base", "sensitivity", "diagnostics", "plot", "report"), sep = "-"), c(
   "base", "sensitivity", "diagnostics", "plot", "report"
 ))
+flow_task_codes[["report"]] <- flow_env_any(
+  c("FLOW_REPORT_TASK_CODE", "TUNA_FLOW_REPORT_TASK_CODE"),
+  paste0("ofp-sam-", flow_species_slug, flow_assessment_year, "-report")
+)
 flow_default_program <- flow_env_any(c("FLOW_MFCL_PROGRAM", "TUNA_FLOW_MFCL_PROGRAM"), "/home/mfcl/mfclo64")
 flow_default_input_dir <- flow_env_any(c("FLOW_BASE_INPUT_DIR", "TUNA_FLOW_BASE_INPUT_DIR"), "mfcl/inputs/2023_4region_1007")
 flow_base_input_dirs <- flow_split_csv(flow_env_any(c("FLOW_BASE_INPUT_DIRS", "TUNA_FLOW_BASE_INPUT_DIRS"), flow_default_input_dir))
@@ -101,7 +109,7 @@ if (!length(flow_base_input_dirs)) {
 flow_default_input_variant <- flow_env_any(c("FLOW_BASE_INPUT_VARIANT", "TUNA_FLOW_BASE_INPUT_VARIANT"), basename(flow_base_input_dirs[[1]]))
 flow_base_job_key <- flow_env_any(c("FLOW_BASE_JOB_KEY", "TUNA_FLOW_BASE_JOB_KEY"), "base-4r-smoke")
 flow_base_token <- flow_env_any(c("FLOW_BASE_TOKEN", "TUNA_FLOW_BASE_TOKEN"), "Base4R")
-flow_report_file_stem <- flow_env_any(c("FLOW_REPORT_FILE_STEM", "TUNA_FLOW_REPORT_FILE_STEM"), "tuna-flow-report")
+flow_report_file_stem <- flow_env_any(c("FLOW_REPORT_FILE_STEM", "TUNA_FLOW_REPORT_FILE_STEM"), "ofp-sam-bet2026-report")
 flow_ini_version_target <- flow_env_any(c("FLOW_MFCL_INI_VERSION_TARGET", "MFCL_INI_VERSION_TARGET"), "1007")
 flow_base_tokens <- flow_split_csv(flow_env_any(c("FLOW_BASE_TOKENS", "TUNA_FLOW_BASE_TOKENS"), ""))
 flow_base_job_keys <- flow_split_csv(flow_env_any(c("FLOW_BASE_JOB_KEYS", "TUNA_FLOW_BASE_JOB_KEYS"), ""))
@@ -426,10 +434,15 @@ report_runs <- data.frame(
   INPUT_KEY = "plot-depletion-smoke",
   REPORT_TITLE = paste(flow_assessment_label, "Kflow depletion smoke report"),
   REPORT_FILE_STEM = flow_report_file_stem,
-  REPORT_TEMPLATE_DIR = "templates/tuna-assessment",
-  REPORT_TEMPLATE_MAIN = "assessment.qmd",
+  REPORT_SOURCE_REPO = flow_report_repo,
+  REPORT_SOURCE_REF = flow_report_ref,
+  REPORT_SOURCE_PATH = flow_report_path,
+  REPORT_TEMPLATE_MAIN = flow_report_main,
+  REPORT_FIGURE_DIR = "Figures/kflow",
   REPORT_RENDER_FORMAT = "pdf",
   REPORT_REQUIRE_PLOTS = "true",
+  REPORT_REWRITE_FIGURES = "true",
+  REPORT_REWRITE_TABLES = "true",
   MODEL_LABEL = "Depletion smoke report",
   PLOT_LABEL = "Report",
   REPORT_LABEL = "Depletion smoke report",
@@ -774,15 +787,42 @@ plot_from <- function(input_task, input_key, job_key, title = paste("Plot:", inp
   )
 }
 
-report_from <- function(input_task, input_key, job_key, title = paste("Report:", input_key)) {
+report_from <- function(input_task = "",
+                        input_key = "",
+                        job_key,
+                        title = paste("Report:", input_key),
+                        report_source_repo = flow_report_repo,
+                        report_source_ref = flow_report_ref,
+                        report_source_path = flow_report_path,
+                        report_main = flow_report_main,
+                        require_plots = nzchar(input_task) && nzchar(input_key),
+                        rewrite_figures = nzchar(input_task) && nzchar(input_key),
+                        rewrite_tables = nzchar(input_task) && nzchar(input_key),
+                        copy_figure_tree = !isTRUE(rewrite_figures),
+                        figure_input_dir = "") {
   data.frame(
     RUN_LABEL = job_key,
     JOB_KEY = job_key,
     JOB_TITLE = title,
-    JOB_DESCRIPTION = paste("Renders a Quarto report from", input_task, input_key),
+    JOB_DESCRIPTION = if (nzchar(input_task) && nzchar(input_key)) {
+      paste("Renders a Quarto report from", input_task, input_key)
+    } else {
+      paste("Renders", report_source_repo, "directly")
+    },
     INPUT_TASK = input_task,
     INPUT_KEY = input_key,
     REPORT_TITLE = title,
+    REPORT_FILE_STEM = flow_report_file_stem,
+    REPORT_SOURCE_REPO = report_source_repo,
+    REPORT_SOURCE_REF = report_source_ref,
+    REPORT_SOURCE_PATH = report_source_path,
+    REPORT_TEMPLATE_MAIN = report_main,
+    REPORT_RENDER_FORMAT = "pdf",
+    REPORT_REQUIRE_PLOTS = ifelse(isTRUE(require_plots), "true", "false"),
+    REPORT_REWRITE_FIGURES = ifelse(isTRUE(rewrite_figures), "true", "false"),
+    REPORT_REWRITE_TABLES = ifelse(isTRUE(rewrite_tables), "true", "false"),
+    REPORT_COPY_FIGURE_TREE = ifelse(isTRUE(copy_figure_tree), "true", "false"),
+    REPORT_FIGURE_INPUT_DIR = figure_input_dir,
     stringsAsFactors = FALSE
   )
 }

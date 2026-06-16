@@ -16,7 +16,7 @@ The local R session registers and launches jobs. The actual MFCL work runs
 inside the Docker image:
 
 ```text
-ghcr.io/pacificcommunity/tuna-flow:v1.2
+ghcr.io/pacificcommunity/tuna-flow:latest
 ```
 
 This tag was built by GitHub Actions run `27601366609` from Docker image commit
@@ -190,13 +190,28 @@ plot_runs$INPUT_KEY <- paste(diagnostics_runs$JOB_KEY, collapse = ",")
 
 The plot job writes:
 
-- `depletion-smoke-combined.csv`
-- `model-exploration-overview.svg`
-- `depletion-smoke.png`
-- `mfclshiny-report-figures/`
-- `plot-input-registry.csv`
+- `report-figures/depletion-smoke.png`
+- `plot-summary.csv`
+- `model-registry.csv`
 
-The report job copies upstream figures automatically into the Quarto report.
+The report job writes:
+
+- `ofp-sam-bet2026-report.pdf` or `.html`, depending on `REPORT_RENDER_FORMAT`
+- `report-summary.csv`
+- `model-registry.csv`
+
+The report job is registered separately as `ofp-sam-bet2026-report`. It clones
+`PacificCommunity/ofp-sam-2026-BET-report`, copies upstream Kflow figures into
+the report, and renders only the compact report outputs. That lets you rerun
+only the report stage from an existing plot job:
+
+```r
+launch_report(report_from(flow_task_codes[["plot"]], "plot-depletion-smoke", "report-rerun"))
+```
+
+If figures already exist in a report-style `Figures/` directory, pass that path
+through `REPORT_FIGURE_INPUT_DIR` and keep `REPORT_REWRITE_FIGURES=false` so the
+report source's own figure section is rendered as-is.
 
 ## Register and launch
 
