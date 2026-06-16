@@ -6,6 +6,25 @@ kflow_write_manifest(ctx$input_dir, file.path(ctx$out_dir, "input-manifest.csv")
 registry_files <- list.files(ctx$input_dir, pattern = "^model-registry[.]csv$", recursive = TRUE, full.names = TRUE)
 summary_files <- list.files(ctx$input_dir, pattern = "summary[.]csv$", recursive = TRUE, full.names = TRUE)
 plot_files <- list.files(ctx$input_dir, pattern = "[.](svg|png|jpg|jpeg)$", recursive = TRUE, full.names = TRUE, ignore.case = TRUE)
+relative_plot_path <- function(path) {
+  gsub("\\\\", "/", substring(normalizePath(path, winslash = "/", mustWork = FALSE), nchar(normalizePath(ctx$input_dir, winslash = "/", mustWork = FALSE)) + 2))
+}
+plot_priority <- function(path) {
+  rel <- relative_plot_path(path)
+  if (grepl("(^|/)report-figures/depletion-smoke[.]png$", rel, ignore.case = TRUE)) return(1L)
+  if (grepl("(^|/)depletion-smoke[.]png$", rel, ignore.case = TRUE)) return(2L)
+  if (grepl("(^|/)report-figures/", rel, ignore.case = TRUE)) return(3L)
+  if (grepl("model-exploration-overview[.](png|svg)$", rel, ignore.case = TRUE)) return(4L)
+  20L
+}
+if (length(plot_files)) {
+  rel_paths <- vapply(plot_files, relative_plot_path, character(1))
+  plot_files <- plot_files[order(
+    vapply(plot_files, plot_priority, integer(1)),
+    ifelse(grepl("[.]png$", rel_paths, ignore.case = TRUE), 0L, 1L),
+    rel_paths
+  )]
+}
 
 registries <- kflow_read_csv_union(registry_files)
 summaries <- kflow_read_csv_union(summary_files)
@@ -58,10 +77,19 @@ invisible(file.copy(file.path(ctx$out_dir, "report-input-summaries.csv"), input_
 plot_dir <- file.path(render_dir, "Figures")
 dir.create(plot_dir, recursive = TRUE, showWarnings = FALSE)
 copied <- character()
+copied_sources <- character()
 for (index in seq_along(plot_files)) {
-  target <- sprintf("plot-%03d.%s", index, tools::file_ext(plot_files[index]))
+  target <- if (index == 1L && grepl("depletion-smoke[.]png$", plot_files[index], ignore.case = TRUE)) {
+    "depletion-smoke.png"
+  } else {
+    sprintf("plot-%03d.%s", index, tools::file_ext(plot_files[index]))
+  }
   file.copy(plot_files[index], file.path(plot_dir, target), overwrite = TRUE)
   copied <- c(copied, file.path("Figures", target))
+  copied_sources <- c(copied_sources, relative_plot_path(plot_files[index]))
+}
+if (!length(copied) && kflow_bool("REPORT_REQUIRE_PLOTS", FALSE)) {
+  stop("REPORT_REQUIRE_PLOTS is true but no upstream plot images were found.", call. = FALSE)
 }
 
 table_section <- c(
@@ -126,6 +154,8 @@ report_summary <- data.frame(
   registry_rows = nrow(registries),
   summary_rows = nrow(summaries),
   plot_files = length(copied),
+  primary_plot_file = if (length(copied)) copied[[1]] else "",
+  primary_plot_source = if (length(copied_sources)) copied_sources[[1]] else "",
   template_dir = template_dir_setting,
   template_main = template_main,
   requested_render_format = render_format,

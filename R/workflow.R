@@ -429,6 +429,7 @@ report_runs <- data.frame(
   REPORT_TEMPLATE_DIR = "templates/tuna-assessment",
   REPORT_TEMPLATE_MAIN = "assessment.qmd",
   REPORT_RENDER_FORMAT = "html",
+  REPORT_REQUIRE_PLOTS = "true",
   MODEL_LABEL = "Depletion smoke report",
   PLOT_LABEL = "Report",
   REPORT_LABEL = "Depletion smoke report",

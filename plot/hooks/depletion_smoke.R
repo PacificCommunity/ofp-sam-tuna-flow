@@ -37,6 +37,8 @@ utils::write.csv(depletion, file.path(out_dir, "depletion-smoke-combined.csv"), 
 
 plot_file <- file.path(out_dir, "model-exploration-overview.svg")
 png_file <- file.path(out_dir, "depletion-smoke.png")
+report_figure_dir <- file.path(out_dir, "report-figures")
+dir.create(report_figure_dir, recursive = TRUE, showWarnings = FALSE)
 mfclshiny_status <- "not_available"
 mfclshiny_figure_dir <- file.path(out_dir, "mfclshiny-report-figures")
 
@@ -77,7 +79,7 @@ if (isTRUE(package_status$available[package_status$package == "mfclshiny"]) &&
 }
 writeLines(mfclshiny_status, file.path(out_dir, "mfclshiny-status.txt"))
 
-if (!file.exists(plot_file) && requireNamespace("ggplot2", quietly = TRUE)) {
+if ((!file.exists(plot_file) || !file.exists(png_file)) && requireNamespace("ggplot2", quietly = TRUE)) {
   p <- ggplot2::ggplot(
     depletion,
     ggplot2::aes(x = year, y = depletion, colour = plot_label, group = interaction(plot_label, model_key, region))
@@ -125,6 +127,16 @@ if (!file.exists(plot_file) && requireNamespace("ggplot2", quietly = TRUE)) {
   grDevices::dev.off()
 }
 
+if (!file.exists(png_file) && file.exists(plot_file) && requireNamespace("rsvg", quietly = TRUE)) {
+  rsvg::rsvg_png(plot_file, png_file, width = 1600, height = 800)
+}
+if (file.exists(png_file)) {
+  file.copy(png_file, file.path(report_figure_dir, "depletion-smoke.png"), overwrite = TRUE)
+}
+if (file.exists(plot_file)) {
+  file.copy(plot_file, file.path(report_figure_dir, "model-exploration-overview.svg"), overwrite = TRUE)
+}
+
 summary <- stats::aggregate(
   depletion ~ model_key + model_token + change_token,
   depletion,
@@ -132,4 +144,9 @@ summary <- stats::aggregate(
 )
 names(summary)[names(summary) == "depletion"] <- "mean_depletion"
 summary$plot_file <- basename(plot_file)
+summary$report_figure <- if (file.exists(file.path(report_figure_dir, "depletion-smoke.png"))) {
+  "report-figures/depletion-smoke.png"
+} else {
+  ""
+}
 utils::write.csv(summary, file.path(out_dir, "depletion-plot-summary.csv"), row.names = FALSE)
