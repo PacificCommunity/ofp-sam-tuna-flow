@@ -467,17 +467,17 @@ common_env <- function(rows) {
   rows$KFLOW_RUNTIME_REQUIRE_PRIVATE_PACKAGES <- if ("KFLOW_RUNTIME_REQUIRE_PRIVATE_PACKAGES" %in% names(rows)) {
     rows$KFLOW_RUNTIME_REQUIRE_PRIVATE_PACKAGES
   } else {
-    "false"
+    "true"
   }
   rows$KFLOW_RUNTIME_UPDATE <- if ("KFLOW_RUNTIME_UPDATE" %in% names(rows)) {
     rows$KFLOW_RUNTIME_UPDATE
   } else {
-    "off"
+    "auto"
   }
   rows$KFLOW_FORWARD_GITHUB_TOKEN_TO_RUNTIME <- if ("KFLOW_FORWARD_GITHUB_TOKEN_TO_RUNTIME" %in% names(rows)) {
     rows$KFLOW_FORWARD_GITHUB_TOKEN_TO_RUNTIME
   } else {
-    "false"
+    "true"
   }
   rows$MODEL_KEY <- if ("MODEL_KEY" %in% names(rows)) rows$MODEL_KEY else rows$JOB_KEY
   rows$MODEL_TOKEN <- if ("MODEL_TOKEN" %in% names(rows)) rows$MODEL_TOKEN else rows$RUN_LABEL

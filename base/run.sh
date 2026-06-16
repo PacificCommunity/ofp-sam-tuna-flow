@@ -10,6 +10,28 @@ load_env() {
   fi
 }
 
+load_default_env() {
+  local file="$1"
+  local line key
+  [[ -f "$file" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [[ -z "$line" || "$line" == \#* || "$line" != *=* ]] && continue
+    key="${line%%=*}"
+    key="${key%"${key##*[![:space:]]}"}"
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    [[ -z "${!key+x}" ]] || continue
+    set -a
+    source <(printf '%s\n' "$line")
+    set +a
+  done < "$file"
+}
+
+drop_runtime_tokens() {
+  unset GIT_PAT GITHUB_PAT GH_TOKEN KFLOW_GITHUB_TOKEN KFLOW_PERSONAL_TOKEN
+}
+
 run_runtime_package_update() {
   local update_status
   if [[ -z "${R_LIBS_USER:-}" ]]; then
@@ -37,9 +59,10 @@ if [[ -n "${KFLOW_JOB_CONFIG_FILE:-}" ]]; then
 elif [[ -f job.env ]]; then
   load_env job.env
 elif [[ -f configs/default.env ]]; then
-  load_env configs/default.env
+  load_default_env configs/default.env
 fi
 
 mkdir -p "${OUTPUT_DIR:-outputs}" "${INPUT_DIR:-inputs}"
 run_runtime_package_update
+drop_runtime_tokens
 Rscript task.R
