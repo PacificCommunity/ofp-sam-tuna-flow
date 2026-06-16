@@ -25,10 +25,44 @@ depletion <- do.call(rbind, lapply(depletion_files, read_one))
 depletion$year <- suppressWarnings(as.integer(depletion$year))
 depletion$depletion <- suppressWarnings(as.numeric(depletion$depletion))
 depletion <- depletion[is.finite(depletion$year) & is.finite(depletion$depletion), , drop = FALSE]
+if (!"plot_label" %in% names(depletion)) {
+  depletion$plot_label <- if ("model_token" %in% names(depletion)) depletion$model_token else depletion$model_key
+}
+if (!"report_label" %in% names(depletion)) {
+  depletion$report_label <- depletion$plot_label
+}
 utils::write.csv(depletion, file.path(out_dir, "depletion-smoke-combined.csv"), row.names = FALSE)
 
+plot_file <- file.path(out_dir, "model-exploration-overview.svg")
+png_file <- file.path(out_dir, "depletion-smoke.png")
 mfclshiny_status <- "not_available"
-if (isTRUE(package_status$available[package_status$package == "mfclshiny"])) {
+mfclshiny_figure_dir <- file.path(out_dir, "mfclshiny-report-figures")
+
+if (isTRUE(package_status$available[package_status$package == "mfclshiny"]) &&
+    "build_report_figures" %in% getNamespaceExports("mfclshiny")) {
+  mfclshiny_status <- tryCatch({
+    result <- mfclshiny::build_report_figures(
+      data = depletion,
+      output_dir = mfclshiny_figure_dir,
+      title = plot_title,
+      figure_basename = "model-exploration-overview",
+      formats = c("svg", "png"),
+      build_payloads = FALSE,
+      overwrite = TRUE
+    )
+    svg_src <- file.path(mfclshiny_figure_dir, "model-exploration-overview.svg")
+    png_src <- file.path(mfclshiny_figure_dir, "model-exploration-overview.png")
+    if (file.exists(svg_src)) {
+      file.copy(svg_src, plot_file, overwrite = TRUE)
+    }
+    if (file.exists(png_src)) {
+      file.copy(png_src, png_file, overwrite = TRUE)
+    }
+    paste("report_figures_ok:", nrow(result$figures), "figures")
+  }, error = function(e) {
+    paste("report_figures_skipped:", conditionMessage(e))
+  })
+} else if (isTRUE(package_status$available[package_status$package == "mfclshiny"])) {
   mfclshiny_status <- tryCatch({
     model_roots <- unique(dirname(depletion_files))
     # This builds payloads only when real MFCL raw outputs are present. For the
@@ -41,13 +75,10 @@ if (isTRUE(package_status$available[package_status$package == "mfclshiny"])) {
 }
 writeLines(mfclshiny_status, file.path(out_dir, "mfclshiny-status.txt"))
 
-plot_file <- file.path(out_dir, "model-exploration-overview.svg")
-png_file <- file.path(out_dir, "depletion-smoke.png")
-
-if (requireNamespace("ggplot2", quietly = TRUE)) {
+if (!file.exists(plot_file) && requireNamespace("ggplot2", quietly = TRUE)) {
   p <- ggplot2::ggplot(
     depletion,
-    ggplot2::aes(x = year, y = depletion, colour = model_token, group = interaction(model_token, region))
+    ggplot2::aes(x = year, y = depletion, colour = plot_label, group = interaction(plot_label, model_key, region))
   ) +
     ggplot2::geom_line(linewidth = 0.7, alpha = 0.8) +
     ggplot2::geom_point(size = 1.8, alpha = 0.9) +
@@ -68,7 +99,7 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
     )
   ggplot2::ggsave(plot_file, p, width = 10, height = 5, units = "in")
   ggplot2::ggsave(png_file, p, width = 10, height = 5, units = "in", dpi = 160)
-} else {
+} else if (!file.exists(plot_file)) {
   grDevices::svg(plot_file, width = 10, height = 5)
   old <- graphics::par(mar = c(4, 5, 3, 1))
   on.exit(graphics::par(old), add = TRUE)

@@ -48,9 +48,28 @@ kflow_note <- function(..., log_file = NULL) {
   }
 }
 
-kflow_run_shell <- function(command, workdir = getwd(), log_file = NULL) {
+kflow_secret_env_names <- function() {
+  c(
+    "GIT_PAT",
+    "GITHUB_PAT",
+    "GH_TOKEN",
+    "KFLOW_API_TOKEN",
+    "KFLOW_GITHUB_TOKEN",
+    "KFLOW_PERSONAL_TOKEN"
+  )
+}
+
+kflow_sanitize_shell_command <- function(command) {
+  unset <- paste(sprintf("unset %s", kflow_secret_env_names()), collapse = "; ")
+  paste(unset, command, sep = "; ")
+}
+
+kflow_run_shell <- function(command, workdir = getwd(), log_file = NULL, sanitize_env = FALSE) {
   old <- setwd(workdir)
   on.exit(setwd(old), add = TRUE)
+  if (isTRUE(sanitize_env)) {
+    command <- kflow_sanitize_shell_command(command)
+  }
   if (is.null(log_file)) {
     status <- system2("bash", c("-lc", command))
   } else {
@@ -306,7 +325,7 @@ kflow_run_make_targets <- function(source_dir, targets, log_file = NULL) {
   for (target in targets) {
     kflow_note("Running make target: ", target, log_file = log_file)
     command <- paste(c("make", target, make_vars), collapse = " ")
-    kflow_run_shell(command, workdir = source_dir, log_file = log_file)
+    kflow_run_shell(command, workdir = source_dir, log_file = log_file, sanitize_env = TRUE)
   }
   invisible(targets)
 }
@@ -342,8 +361,17 @@ kflow_write_smoke_depletion <- function(target_dir, stage) {
   grid$stage <- stage
   grid$model_key <- kflow_env("MODEL_KEY", kflow_env("JOB_KEY", ""))
   grid$model_token <- kflow_env("MODEL_TOKEN", kflow_env("RUN_LABEL", ""))
+  grid$model_label <- kflow_env("MODEL_LABEL", grid$model_token[[1]])
+  grid$plot_label <- kflow_env("PLOT_LABEL", grid$model_token[[1]])
+  grid$report_label <- kflow_env("REPORT_LABEL", grid$model_label[[1]])
   grid$change_token <- token
   grid$change_group <- kflow_env("CHANGE_GROUP", "")
+  grid$change_detail <- kflow_env("CHANGE_DETAIL", kflow_env("CHANGE_SUMMARY", ""))
+  grid$parent_model_key <- kflow_env("PARENT_MODEL_KEY", kflow_env("BASE_MODEL_KEY", ""))
+  grid$parent_model_token <- kflow_env("PARENT_MODEL_TOKEN", "")
+  grid$recipe_token <- kflow_env("RECIPE_TOKEN", token)
+  grid$recipe_family <- kflow_env("RECIPE_FAMILY", kflow_env("CHANGE_GROUP", ""))
+  grid$recipe_label <- kflow_env("RECIPE_LABEL", token)
   grid$source <- "mfcl_makepar_smoke"
   out_file <- file.path(target_dir, "depletion-smoke.csv")
   utils::write.csv(grid, out_file, row.names = FALSE)
@@ -370,7 +398,7 @@ kflow_run_mfcl_smoke <- function(source_dir, out_dir, stage, log_file = NULL) {
     "-makepar"
   )
   kflow_note("Running MFCL smoke makepar in ", model_dir, log_file = log_file)
-  kflow_run_shell(command, workdir = model_dir, log_file = log_file)
+  kflow_run_shell(command, workdir = model_dir, log_file = log_file, sanitize_env = TRUE)
 
   output_par <- file.path(model_dir, par)
   if (!file.exists(output_par)) {
@@ -411,7 +439,16 @@ kflow_run_diagnostics_smoke <- function(source_dir, out_dir, stage = "diagnostic
     diagnostic$stage <- stage
     diagnostic$model_key <- kflow_env("MODEL_KEY", kflow_env("JOB_KEY", ""))
     diagnostic$model_token <- kflow_env("MODEL_TOKEN", kflow_env("RUN_LABEL", ""))
+    diagnostic$model_label <- kflow_env("MODEL_LABEL", diagnostic$model_token[[1]])
+    diagnostic$plot_label <- kflow_env("PLOT_LABEL", diagnostic$model_token[[1]])
+    diagnostic$report_label <- kflow_env("REPORT_LABEL", diagnostic$model_label[[1]])
     diagnostic$change_token <- kflow_env("CHANGE_TOKEN", "JitterSmoke")
+    diagnostic$change_detail <- kflow_env("CHANGE_DETAIL", kflow_env("CHANGE_SUMMARY", ""))
+    diagnostic$parent_model_key <- kflow_env("PARENT_MODEL_KEY", kflow_env("INPUT_KEY", ""))
+    diagnostic$parent_model_token <- kflow_env("PARENT_MODEL_TOKEN", "")
+    diagnostic$recipe_token <- kflow_env("RECIPE_TOKEN", diagnostic$change_token[[1]])
+    diagnostic$recipe_family <- kflow_env("RECIPE_FAMILY", kflow_env("CHANGE_GROUP", ""))
+    diagnostic$recipe_label <- kflow_env("RECIPE_LABEL", diagnostic$change_token[[1]])
     diagnostic$source <- "diagnostics_smoke_from_parent"
     diagnostic$model_role <- "diagnostics"
     diagnostic$depletion <- round(pmax(0.05, pmin(0.95, as.numeric(diagnostic$depletion) + 0.005)), 3)
@@ -479,7 +516,7 @@ kflow_apply_patch_script <- function(source_dir, input_dir, out_dir, stage, log_
   )
 
   kflow_note("Applying patch script: ", script_path, log_file = log_file)
-  kflow_run_shell(sprintf("Rscript %s", shQuote(script_path)), workdir = source_dir, log_file = log_file)
+  kflow_run_shell(sprintf("Rscript %s", shQuote(script_path)), workdir = source_dir, log_file = log_file, sanitize_env = TRUE)
 
   utils::write.csv(
     data.frame(
@@ -510,7 +547,7 @@ kflow_run_optional_script <- function(env_name, source_dir, out_dir, stage, log_
     KFLOW_OUT_DIR = normalizePath(out_dir, winslash = "/", mustWork = FALSE)
   )
   kflow_note("Running optional script ", env_name, ": ", script_path, log_file = log_file)
-  kflow_run_shell(sprintf("Rscript %s", shQuote(script_path)), workdir = source_dir, log_file = log_file)
+  kflow_run_shell(sprintf("Rscript %s", shQuote(script_path)), workdir = source_dir, log_file = log_file, sanitize_env = TRUE)
   invisible(TRUE)
 }
 
@@ -527,7 +564,7 @@ kflow_run_backend <- function(source_dir, out_dir, stage, log_file = NULL) {
     script <- kflow_env("BACKEND_SCRIPT", "")
     if (nzchar(command)) {
       kflow_note("Running mfclrtmb backend command.", log_file = log_file)
-      kflow_run_shell(command, workdir = source_dir, log_file = log_file)
+      kflow_run_shell(command, workdir = source_dir, log_file = log_file, sanitize_env = TRUE)
     } else {
       script_path <- kflow_existing_script(script)
       if (!nzchar(script_path)) {
@@ -539,7 +576,7 @@ kflow_run_backend <- function(source_dir, out_dir, stage, log_file = NULL) {
         KFLOW_OUT_DIR = normalizePath(out_dir, winslash = "/", mustWork = FALSE)
       )
       kflow_note("Running mfclrtmb backend script: ", script_path, log_file = log_file)
-      kflow_run_shell(sprintf("Rscript %s", shQuote(script_path)), workdir = source_dir, log_file = log_file)
+      kflow_run_shell(sprintf("Rscript %s", shQuote(script_path)), workdir = source_dir, log_file = log_file, sanitize_env = TRUE)
     }
   } else {
     stop(sprintf("Unknown MFCL_BACKEND: %s", backend), call. = FALSE)
@@ -555,13 +592,22 @@ kflow_registry_values <- function(stage, extra = list()) {
     model_key = kflow_env("MODEL_KEY", kflow_env("JOB_KEY", "")),
     model_token = kflow_env("MODEL_TOKEN", kflow_env("RUN_LABEL", "")),
     model_name = kflow_env("MODEL_NAME", kflow_env("JOB_TITLE", "")),
+    model_label = kflow_env("MODEL_LABEL", kflow_env("MODEL_TOKEN", "")),
+    plot_label = kflow_env("PLOT_LABEL", kflow_env("MODEL_TOKEN", "")),
+    report_label = kflow_env("REPORT_LABEL", kflow_env("MODEL_NAME", "")),
     run_label = kflow_env("RUN_LABEL", ""),
     job_key = kflow_env("JOB_KEY", ""),
     base_model_key = kflow_env("BASE_MODEL_KEY", ""),
+    parent_model_key = kflow_env("PARENT_MODEL_KEY", ""),
+    parent_model_token = kflow_env("PARENT_MODEL_TOKEN", ""),
     parent_task = kflow_env("INPUT_TASK", ""),
     parent_key = kflow_env("INPUT_KEY", ""),
+    recipe_token = kflow_env("RECIPE_TOKEN", ""),
+    recipe_family = kflow_env("RECIPE_FAMILY", ""),
+    recipe_label = kflow_env("RECIPE_LABEL", ""),
     change_token = kflow_env("CHANGE_TOKEN", ""),
     change_group = kflow_env("CHANGE_GROUP", ""),
+    change_detail = kflow_env("CHANGE_DETAIL", ""),
     change_summary = kflow_env("CHANGE_SUMMARY", kflow_env("JOB_DESCRIPTION", "")),
     input_variant = kflow_env("INPUT_VARIANT", ""),
     patch_script = kflow_env("PATCH_SCRIPT", ""),
@@ -613,9 +659,18 @@ kflow_write_summary <- function(out_dir, stage, extra = list()) {
       base_dir = kflow_env("BASE_DIR", ""),
       model_dir = kflow_env("MODEL_DIR", ""),
       model_token = kflow_env("MODEL_TOKEN", ""),
+      model_label = kflow_env("MODEL_LABEL", ""),
+      plot_label = kflow_env("PLOT_LABEL", ""),
+      report_label = kflow_env("REPORT_LABEL", ""),
       change_token = kflow_env("CHANGE_TOKEN", ""),
       change_group = kflow_env("CHANGE_GROUP", ""),
+      change_detail = kflow_env("CHANGE_DETAIL", ""),
       change_summary = kflow_env("CHANGE_SUMMARY", ""),
+      parent_model_key = kflow_env("PARENT_MODEL_KEY", ""),
+      parent_model_token = kflow_env("PARENT_MODEL_TOKEN", ""),
+      recipe_token = kflow_env("RECIPE_TOKEN", ""),
+      recipe_family = kflow_env("RECIPE_FAMILY", ""),
+      recipe_label = kflow_env("RECIPE_LABEL", ""),
       patch_script = kflow_env("PATCH_SCRIPT", "")
     ),
     extra

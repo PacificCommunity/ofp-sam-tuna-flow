@@ -58,6 +58,58 @@ plan_nonempty <- function(value, default = "") {
   as.character(value[[1]])
 }
 
+build_starter_plan <- function() {
+  list(
+    base = common_env(base_models),
+    sensitivity = common_env(sensitivity_models),
+    diagnostics = common_env(diagnostics_runs),
+    plot = common_env(plot_runs),
+    report = common_env(report_runs)
+  )
+}
+
+build_recipe_plan <- function(bases = base_models,
+                              sensitivity_recipes = starter_sensitivity_recipes,
+                              diagnostics_recipes = starter_diagnostics_recipes,
+                              plots = plot_runs,
+                              reports = report_runs,
+                              include_base_diagnostics = TRUE,
+                              include_sensitivity_diagnostics = TRUE) {
+  bases <- common_env(bases)
+  sensitivity_rows <- common_env(build_sensitivity_rows(bases, sensitivity_recipes))
+  diagnostic_inputs <- plan_bind_rows(
+    if (isTRUE(include_base_diagnostics)) bases else NULL,
+    if (isTRUE(include_sensitivity_diagnostics)) sensitivity_rows else NULL
+  )
+  diagnostic_input_tasks <- ifelse(
+    diagnostic_inputs$JOB_KEY %in% bases$JOB_KEY,
+    plan_task_code("base"),
+    plan_task_code("sensitivity")
+  )
+  diagnostic_rows <- common_env(build_diagnostics_rows(
+    diagnostic_inputs,
+    diagnostics_recipes,
+    diagnostic_input_tasks
+  ))
+  plots <- common_env(plots)
+  reports <- common_env(reports)
+  if (nrow(plots) && nrow(diagnostic_rows)) {
+    plots$INPUT_TASK <- plan_task_code("diagnostics")
+    plots$INPUT_KEY <- paste(diagnostic_rows$JOB_KEY, collapse = ",")
+  }
+  if (nrow(reports) && nrow(plots)) {
+    reports$INPUT_TASK <- plan_task_code("plot")
+    reports$INPUT_KEY <- paste(plots$JOB_KEY, collapse = ",")
+  }
+  list(
+    base = bases,
+    sensitivity = sensitivity_rows,
+    diagnostics = diagnostic_rows,
+    plot = plots,
+    report = reports
+  )
+}
+
 diagnostic_recipes <- function() {
   data.frame(
     DIAGNOSTIC_TOKEN = c("JitterSmoke", "Retro4", "HessianP1"),

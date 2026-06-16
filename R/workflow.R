@@ -11,6 +11,10 @@
   if (is.null(x) || length(x) == 0 || (length(x) == 1 && is.na(x))) y else x
 }
 
+bet_nonempty <- function(x, y = "") {
+  if (is.null(x) || !length(x) || is.na(x[[1]]) || !nzchar(as.character(x[[1]]))) y else as.character(x[[1]])
+}
+
 bet_require_kflowkit <- function() {
   if (!requireNamespace("KflowKit", quietly = TRUE)) {
     stop(
@@ -84,66 +88,147 @@ base_models <- data.frame(
   stringsAsFactors = FALSE
 )
 
-sensitivity_models <- data.frame(
-  RUN_LABEL = "sens-noAgeSmoke",
-  JOB_KEY = "sens-noAgeSmoke",
-  MODEL_KEY = "sens-noAgeSmoke",
-  MODEL_TOKEN = "NoAgeSmoke",
-  MODEL_NAME = "BET no-age sensitivity smoke",
-  BASE_MODEL_KEY = "base-4r-smoke",
-  CHANGE_TOKEN = "NoAgeSmoke",
-  CHANGE_GROUP = "age-data",
-  CHANGE_SUMMARY = "Creates a no-age sensitivity recipe inspired by the BET report noAge sensitivity and runs a fast makepar smoke check.",
-  INPUT_VARIANT = "2023_4region_noAgeSmoke",
-  INPUT_TASK = bet_task_codes[["base"]],
-  INPUT_KEY = "base-4r-smoke",
-  SOURCE_REPO = "flow_checkout",
-  SOURCE_REF = "",
-  USE_FLOW_SOURCE = "1",
-  MFCL_BACKEND = "mfcl_smoke",
-  PROGRAM_PATH = bet_default_program,
-  MAKE_TARGETS = "mfcl-smoke",
-  BASE_DIR = "mfcl/inputs/2023_4region_noAgeSmoke",
-  MODEL_DIR = "model/sens-noAgeSmoke",
-  PATCH_SCRIPT = "patches/no_age_smoke.R",
-  PATCH_INPUT_DIR = bet_default_input_dir,
-  PATCH_OUTPUT_DIR = "mfcl/inputs/2023_4region_noAgeSmoke",
-  JOB_TITLE = "Sensitivity: NoAgeSmoke",
-  JOB_DESCRIPTION = "Builds a no-age sensitivity input recipe from the base 4-region input and runs a fast MFCL smoke check.",
-  COLLECT_PATHS = "model/base-4r-smoke,model/sens-noAgeSmoke,mfcl/inputs/2023_4region_noAgeSmoke",
+starter_sensitivity_recipes <- data.frame(
+  RECIPE_TOKEN = c("NoAgeSmoke", "FixM", "FixVB"),
+  RECIPE_KEY = c("noAgeSmoke", "fixM", "fixVB"),
+  RECIPE_FAMILY = c("age-data", "natural-mortality", "growth"),
+  RECIPE_LABEL = c("No age data", "Fixed M", "Fixed growth"),
+  INPUT_VARIANT_SUFFIX = c("noAgeSmoke", "fixM", "fixVB"),
+  PATCH_SCRIPT = c("patches/no_age_smoke.R", "patches/fix_m_smoke.R", "patches/fix_vb_smoke.R"),
+  CHANGE_DETAIL = c(
+    "No-age sensitivity marker based on the BET report noAge idea.",
+    "Fixed natural mortality marker. Replace the smoke marker with the exact M-fix edit for inference runs.",
+    "Fixed von Bertalanffy growth marker. Replace the smoke marker with the exact growth-fix edit for inference runs."
+  ),
   stringsAsFactors = FALSE
 )
 
-diagnostics_runs <- data.frame(
-  RUN_LABEL = "diag-noAgeSmoke-jitter",
-  JOB_KEY = "diag-noAgeSmoke-jitter",
-  MODEL_KEY = "diag-noAgeSmoke-jitter",
-  MODEL_TOKEN = "NoAgeSmoke_Jitter",
-  MODEL_NAME = "BET no-age jitter diagnostics smoke",
-  BASE_MODEL_KEY = "base-4r-smoke",
-  CHANGE_TOKEN = "JitterSmoke",
-  CHANGE_GROUP = "diagnostics",
-  CHANGE_SUMMARY = "Runs a lightweight diagnostics aggregation from the NoAgeSmoke sensitivity output.",
-  INPUT_VARIANT = "2023_4region_noAgeSmoke",
-  INPUT_TASK = bet_task_codes[["sensitivity"]],
-  INPUT_KEY = "sens-noAgeSmoke",
-  SOURCE_REPO = "flow_checkout",
-  SOURCE_REF = "",
-  USE_FLOW_SOURCE = "1",
-  MFCL_BACKEND = "diagnostics_smoke",
-  PROGRAM_PATH = bet_default_program,
+starter_diagnostics_recipes <- data.frame(
+  RECIPE_TOKEN = "JitterSmoke",
+  RECIPE_KEY = "jitter",
+  RECIPE_FAMILY = "diagnostics",
+  RECIPE_LABEL = "Jitter smoke",
+  CHANGE_DETAIL = "Lightweight jitter-style diagnostics aggregation for fast dependency testing.",
   MAKE_TARGETS = "diagnostics-smoke",
-  BASE_DIR = "mfcl/inputs/2023_4region_noAgeSmoke",
-  MODEL_DIR = "model/diag-noAgeSmoke-jitter",
   JITTER_SEED = 40,
-  JITTER_SMOKE_ONLY = "1",
-  PATCH_SCRIPT = "",
-  PATCH_INPUT_DIR = "",
-  PATCH_OUTPUT_DIR = "",
-  JOB_TITLE = "Diagnostics: NoAgeSmoke jitter",
-  JOB_DESCRIPTION = "Creates a short diagnostics summary from the selected no-age sensitivity smoke output.",
-  COLLECT_PATHS = "model/diag-noAgeSmoke-jitter",
   stringsAsFactors = FALSE
+)
+
+build_sensitivity_rows <- function(bases, recipes) {
+  rows <- list()
+  for (base_index in seq_len(nrow(bases))) {
+    base <- bases[base_index, , drop = FALSE]
+    for (recipe_index in seq_len(nrow(recipes))) {
+      recipe <- recipes[recipe_index, , drop = FALSE]
+      job_key <- paste("sens", recipe$RECIPE_KEY, sep = "-")
+      input_variant <- paste("2023_4region", recipe$INPUT_VARIANT_SUFFIX, sep = "_")
+      base_dir <- file.path("mfcl/inputs", input_variant)
+      model_dir <- file.path("model", job_key)
+      model_token <- recipe$RECIPE_TOKEN
+      rows[[length(rows) + 1L]] <- data.frame(
+        RUN_LABEL = job_key,
+        JOB_KEY = job_key,
+        MODEL_KEY = job_key,
+        MODEL_TOKEN = model_token,
+        MODEL_NAME = paste("BET", recipe$RECIPE_LABEL, "sensitivity smoke"),
+        MODEL_LABEL = paste(base$MODEL_TOKEN, recipe$RECIPE_TOKEN, sep = " | "),
+        PLOT_LABEL = recipe$RECIPE_TOKEN,
+        REPORT_LABEL = paste(recipe$RECIPE_TOKEN, "-", recipe$RECIPE_LABEL),
+        BASE_MODEL_KEY = base$JOB_KEY,
+        PARENT_MODEL_KEY = base$JOB_KEY,
+        PARENT_MODEL_TOKEN = base$MODEL_TOKEN,
+        RECIPE_TOKEN = recipe$RECIPE_TOKEN,
+        RECIPE_FAMILY = recipe$RECIPE_FAMILY,
+        RECIPE_LABEL = recipe$RECIPE_LABEL,
+        CHANGE_TOKEN = recipe$RECIPE_TOKEN,
+        CHANGE_GROUP = recipe$RECIPE_FAMILY,
+        CHANGE_DETAIL = recipe$CHANGE_DETAIL,
+        CHANGE_SUMMARY = paste(recipe$CHANGE_DETAIL, "Runs a fast makepar smoke check."),
+        INPUT_VARIANT = input_variant,
+        INPUT_TASK = bet_task_codes[["base"]],
+        INPUT_KEY = base$JOB_KEY,
+        SOURCE_REPO = "flow_checkout",
+        SOURCE_REF = "",
+        USE_FLOW_SOURCE = "1",
+        MFCL_BACKEND = "mfcl_smoke",
+        PROGRAM_PATH = bet_default_program,
+        MAKE_TARGETS = "mfcl-smoke",
+        BASE_DIR = base_dir,
+        MODEL_DIR = model_dir,
+        PATCH_SCRIPT = recipe$PATCH_SCRIPT,
+        PATCH_INPUT_DIR = bet_default_input_dir,
+        PATCH_OUTPUT_DIR = base_dir,
+        JOB_TITLE = paste("Sensitivity:", recipe$RECIPE_TOKEN),
+        JOB_DESCRIPTION = paste("Builds", recipe$RECIPE_LABEL, "from", base$MODEL_TOKEN, "and runs a fast MFCL smoke check."),
+        COLLECT_PATHS = paste(base$MODEL_DIR, model_dir, base_dir, sep = ","),
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  do.call(rbind, rows)
+}
+
+build_diagnostics_rows <- function(parent_rows, recipes, input_task) {
+  rows <- list()
+  for (parent_index in seq_len(nrow(parent_rows))) {
+    parent <- parent_rows[parent_index, , drop = FALSE]
+    parent_input_task <- if (length(input_task) > 1L) input_task[[parent_index]] else input_task
+    for (recipe_index in seq_len(nrow(recipes))) {
+      recipe <- recipes[recipe_index, , drop = FALSE]
+      seed <- suppressWarnings(as.integer(recipe$JITTER_SEED)) + parent_index - 1L
+      job_key <- paste("diag", parent$MODEL_TOKEN, recipe$RECIPE_KEY, sep = "-")
+      job_key <- gsub("[^A-Za-z0-9_-]+", "-", job_key)
+      model_token <- paste(parent$MODEL_TOKEN, recipe$RECIPE_TOKEN, sep = "_")
+      rows[[length(rows) + 1L]] <- data.frame(
+        RUN_LABEL = job_key,
+        JOB_KEY = job_key,
+        MODEL_KEY = job_key,
+        MODEL_TOKEN = model_token,
+        MODEL_NAME = paste("BET", parent$MODEL_TOKEN, recipe$RECIPE_LABEL, "diagnostics smoke"),
+        MODEL_LABEL = paste(parent$MODEL_TOKEN, recipe$RECIPE_TOKEN, sep = " | "),
+        PLOT_LABEL = paste(parent$MODEL_TOKEN, recipe$RECIPE_TOKEN, sep = " + "),
+        REPORT_LABEL = paste(parent$MODEL_TOKEN, recipe$RECIPE_LABEL, sep = " - "),
+        BASE_MODEL_KEY = bet_nonempty(parent$BASE_MODEL_KEY, parent$JOB_KEY),
+        PARENT_MODEL_KEY = parent$JOB_KEY,
+        PARENT_MODEL_TOKEN = parent$MODEL_TOKEN,
+        RECIPE_TOKEN = recipe$RECIPE_TOKEN,
+        RECIPE_FAMILY = recipe$RECIPE_FAMILY,
+        RECIPE_LABEL = recipe$RECIPE_LABEL,
+        CHANGE_TOKEN = recipe$RECIPE_TOKEN,
+        CHANGE_GROUP = recipe$RECIPE_FAMILY,
+        CHANGE_DETAIL = recipe$CHANGE_DETAIL,
+        CHANGE_SUMMARY = paste(recipe$CHANGE_DETAIL, "Input:", parent$MODEL_TOKEN),
+        INPUT_VARIANT = parent$INPUT_VARIANT %||% "",
+        INPUT_TASK = parent_input_task,
+        INPUT_KEY = parent$JOB_KEY,
+        SOURCE_REPO = "flow_checkout",
+        SOURCE_REF = "",
+        USE_FLOW_SOURCE = "1",
+        MFCL_BACKEND = "diagnostics_smoke",
+        PROGRAM_PATH = bet_default_program,
+        MAKE_TARGETS = recipe$MAKE_TARGETS,
+        BASE_DIR = parent$BASE_DIR %||% "",
+        MODEL_DIR = file.path("model", job_key),
+        JITTER_SEED = seed,
+        JITTER_SMOKE_ONLY = "1",
+        PATCH_SCRIPT = "",
+        PATCH_INPUT_DIR = "",
+        PATCH_OUTPUT_DIR = "",
+        JOB_TITLE = paste("Diagnostics:", parent$MODEL_TOKEN, recipe$RECIPE_TOKEN),
+        JOB_DESCRIPTION = paste("Creates a short diagnostics summary from", parent$MODEL_TOKEN, "using", recipe$RECIPE_LABEL, "."),
+        COLLECT_PATHS = file.path("model", job_key),
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  do.call(rbind, rows)
+}
+
+sensitivity_models <- build_sensitivity_rows(base_models, starter_sensitivity_recipes)
+
+diagnostics_runs <- rbind(
+  build_diagnostics_rows(base_models, starter_diagnostics_recipes, bet_task_codes[["base"]]),
+  build_diagnostics_rows(sensitivity_models, starter_diagnostics_recipes, bet_task_codes[["sensitivity"]])
 )
 
 plot_runs <- data.frame(
@@ -159,7 +244,7 @@ plot_runs <- data.frame(
   JOB_TITLE = "Plot: depletion smoke",
   JOB_DESCRIPTION = "Creates a simple depletion plot from selected model and diagnostics outputs.",
   INPUT_TASK = bet_task_codes[["diagnostics"]],
-  INPUT_KEY = "diag-noAgeSmoke-jitter",
+  INPUT_KEY = paste(diagnostics_runs$JOB_KEY, collapse = ","),
   PLOT_TITLE = "BET 2026 depletion smoke check",
   PLOT_BACKEND = "mfclshiny",
   MFCLSHINY_SCRIPT = "hooks/depletion_smoke.R",
@@ -209,10 +294,19 @@ common_env <- function(rows) {
   rows$FLOW_GROUP <- if ("FLOW_GROUP" %in% names(rows)) rows$FLOW_GROUP else bet_flow_group
   rows$MODEL_KEY <- if ("MODEL_KEY" %in% names(rows)) rows$MODEL_KEY else rows$JOB_KEY
   rows$MODEL_TOKEN <- if ("MODEL_TOKEN" %in% names(rows)) rows$MODEL_TOKEN else rows$RUN_LABEL
+  rows$MODEL_LABEL <- if ("MODEL_LABEL" %in% names(rows)) rows$MODEL_LABEL else rows$MODEL_TOKEN
+  rows$PLOT_LABEL <- if ("PLOT_LABEL" %in% names(rows)) rows$PLOT_LABEL else rows$MODEL_TOKEN
+  rows$REPORT_LABEL <- if ("REPORT_LABEL" %in% names(rows)) rows$REPORT_LABEL else rows$MODEL_NAME %||% rows$MODEL_TOKEN
   rows$BASE_MODEL_KEY <- if ("BASE_MODEL_KEY" %in% names(rows)) rows$BASE_MODEL_KEY else ""
+  rows$PARENT_MODEL_KEY <- if ("PARENT_MODEL_KEY" %in% names(rows)) rows$PARENT_MODEL_KEY else rows$BASE_MODEL_KEY
+  rows$PARENT_MODEL_TOKEN <- if ("PARENT_MODEL_TOKEN" %in% names(rows)) rows$PARENT_MODEL_TOKEN else ""
   rows$CHANGE_TOKEN <- if ("CHANGE_TOKEN" %in% names(rows)) rows$CHANGE_TOKEN else rows$MODEL_TOKEN
   rows$CHANGE_GROUP <- if ("CHANGE_GROUP" %in% names(rows)) rows$CHANGE_GROUP else ""
   rows$CHANGE_SUMMARY <- if ("CHANGE_SUMMARY" %in% names(rows)) rows$CHANGE_SUMMARY else rows$JOB_DESCRIPTION
+  rows$CHANGE_DETAIL <- if ("CHANGE_DETAIL" %in% names(rows)) rows$CHANGE_DETAIL else rows$CHANGE_SUMMARY
+  rows$RECIPE_TOKEN <- if ("RECIPE_TOKEN" %in% names(rows)) rows$RECIPE_TOKEN else rows$CHANGE_TOKEN
+  rows$RECIPE_FAMILY <- if ("RECIPE_FAMILY" %in% names(rows)) rows$RECIPE_FAMILY else rows$CHANGE_GROUP
+  rows$RECIPE_LABEL <- if ("RECIPE_LABEL" %in% names(rows)) rows$RECIPE_LABEL else rows$RECIPE_TOKEN
   rows
 }
 
