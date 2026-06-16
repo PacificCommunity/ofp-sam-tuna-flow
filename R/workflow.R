@@ -474,6 +474,11 @@ common_env <- function(rows) {
   } else {
     "off"
   }
+  rows$KFLOW_FORWARD_GITHUB_TOKEN_TO_RUNTIME <- if ("KFLOW_FORWARD_GITHUB_TOKEN_TO_RUNTIME" %in% names(rows)) {
+    rows$KFLOW_FORWARD_GITHUB_TOKEN_TO_RUNTIME
+  } else {
+    "false"
+  }
   rows$MODEL_KEY <- if ("MODEL_KEY" %in% names(rows)) rows$MODEL_KEY else rows$JOB_KEY
   rows$MODEL_TOKEN <- if ("MODEL_TOKEN" %in% names(rows)) rows$MODEL_TOKEN else rows$RUN_LABEL
   rows$MODEL_LABEL <- if ("MODEL_LABEL" %in% names(rows)) rows$MODEL_LABEL else rows$MODEL_TOKEN

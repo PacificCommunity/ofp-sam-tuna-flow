@@ -233,3 +233,5 @@ Private helper packages such as `mfclkit`, `mfclshiny`, `mfclrtmb`, and
 `KFLOW_RUNTIME_UPDATE=auto` and `GIT_PAT` or `GITHUB_PAT` are available. The
 public smoke path keeps runtime updates off, so it runs without exposing private
 package code or contacting private GitHub repositories.
+Kflow clone tokens are not forwarded into the container unless a job explicitly
+sets `KFLOW_FORWARD_GITHUB_TOKEN_TO_RUNTIME=1`.
