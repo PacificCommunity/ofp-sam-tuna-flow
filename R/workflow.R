@@ -440,14 +440,13 @@ report_runs <- data.frame(
 
 runtime_package_specs <- function(backend) {
   base_specs <- c(
-    "mfclrtmb=PacificCommunity/ofp-sam-mfclrtmb@main",
     "mfclkit=PacificCommunity/ofp-sam-mfclkit@main",
     "mfclshiny=PacificCommunity/mfclshiny@main",
     "KflowKit=kyuhank/KflowKit@main"
   )
   backend <- tolower(as.character(backend %||% "mfcl_exe"))
   if (identical(backend, "mfclrtmb")) {
-    return(paste(base_specs, collapse = ","))
+    return(paste(c("mfclrtmb=PacificCommunity/ofp-sam-mfclrtmb@main", base_specs), collapse = ","))
   }
   paste(base_specs, collapse = ",")
 }
