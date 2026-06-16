@@ -1,0 +1,52 @@
+name: Diagnostics
+description: Run diagnostics from either a base job or a sensitivity job.
+command: bash run.sh
+docker_image: ghcr.io/pacificcommunity/bet-2026:v1.9
+resources:
+  cpus: 8
+  memory: 32GB
+  disk: 120GB
+output_patterns:
+  - outputs/**
+job_config:
+  optional:
+    - RUN_LABEL
+    - JOB_KEY
+    - JOB_TITLE
+    - JOB_DESCRIPTION
+    - MODEL_KEY
+    - MODEL_TOKEN
+    - MODEL_NAME
+    - BASE_MODEL_KEY
+    - CHANGE_TOKEN
+    - CHANGE_GROUP
+    - CHANGE_SUMMARY
+    - INPUT_VARIANT
+    - INPUT_TASK
+    - INPUT_KEY
+    - SOURCE_REPO
+    - SOURCE_REF
+    - MFCL_BACKEND
+    - BACKEND_SCRIPT
+    - BACKEND_COMMAND
+    - PROGRAM_PATH
+    - MAKE_TARGETS
+    - MAKE_VARS
+    - BASE_DIR
+    - MODEL_DIR
+    - PATCH_SCRIPT
+    - PATCH_INPUT_DIR
+    - PATCH_OUTPUT_DIR
+    - PATCH_ARGS
+    - JITTER_SEED
+    - JITTER_CV
+    - JITTER_SMOKE_ONLY
+    - RETRO_PEEL
+    - N_MIXING_PERIODS
+    - HESSIAN_PART
+    - NSPLIT
+    - DIAGNOSTIC_SEED_GLOB
+    - DIAGNOSTIC_SEED_COPY_TO
+    - COLLECT_PATHS
+    - MFCLKIT_SCRIPT
+

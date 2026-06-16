@@ -1,0 +1,10 @@
+outputs/
+inputs/
+work/
+.kflow-local/
+KflowOutput/
+.Rhistory
+.RData
+.Rproj.user/
+*.log
+

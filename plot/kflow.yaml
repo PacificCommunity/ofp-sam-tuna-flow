@@ -1,0 +1,32 @@
+name: Plot
+description: Combine selected model outputs and create model exploration plots.
+command: bash run.sh
+docker_image: ghcr.io/pacificcommunity/bet-2026:v1.9
+resources:
+  cpus: 2
+  memory: 8GB
+  disk: 40GB
+output_patterns:
+  - outputs/**
+job_config:
+  optional:
+    - RUN_LABEL
+    - JOB_KEY
+    - JOB_TITLE
+    - JOB_DESCRIPTION
+    - MODEL_KEY
+    - MODEL_TOKEN
+    - MODEL_NAME
+    - BASE_MODEL_KEY
+    - CHANGE_TOKEN
+    - CHANGE_GROUP
+    - CHANGE_SUMMARY
+    - INPUT_TASK
+    - INPUT_KEY
+    - PLOT_TITLE
+    - PLOT_BACKEND
+    - MFCLSHINY_SCRIPT
+    - MFCLKIT_SCRIPT
+    - TREE_RESPONSE
+    - TREE_PREDICTORS
+
