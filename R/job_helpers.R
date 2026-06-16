@@ -260,6 +260,13 @@ kflow_collect_paths <- function(source_dir, out_dir, patterns, dest_name = "sour
   invisible(matches)
 }
 
+kflow_maybe_collect_paths <- function(source_dir, out_dir, patterns) {
+  if (!kflow_bool("COLLECT_SOURCE_ARTIFACTS", FALSE)) {
+    return(invisible(character()))
+  }
+  kflow_collect_paths(source_dir, out_dir, patterns)
+}
+
 kflow_sync_input_artifacts <- function(input_dir, source_dir, artifact_dir_name = "source-artifacts", log_file = NULL) {
   if (!dir.exists(input_dir)) {
     return(character())
@@ -400,6 +407,51 @@ kflow_write_smoke_depletion <- function(target_dir, stage) {
   invisible(grid)
 }
 
+kflow_latest_par <- function(model_dir) {
+  pars <- list.files(model_dir, pattern = "[.]par$", full.names = FALSE, ignore.case = TRUE)
+  pars <- pars[!grepl("^smoke-", pars)]
+  if (!length(pars)) {
+    return("")
+  }
+  numeric_key <- suppressWarnings(as.numeric(sub("^([0-9]+).*", "\\1", pars)))
+  if (any(is.finite(numeric_key))) {
+    candidates <- pars[is.finite(numeric_key)]
+    candidate_keys <- numeric_key[is.finite(numeric_key)]
+    return(candidates[order(candidate_keys, candidates)][[length(candidates)]])
+  }
+  info <- file.info(file.path(model_dir, pars))
+  pars[order(info$mtime, pars)][[length(pars)]]
+}
+
+kflow_par_footer <- function(path) {
+  out <- c(objective = NA_real_, max_gradient = NA_real_)
+  if (!nzchar(path) || !file.exists(path)) {
+    return(out)
+  }
+  lines <- readLines(path, warn = FALSE)
+  objective_i <- grep("# Objective function value", lines, fixed = TRUE)
+  gradient_i <- grep("# Maximum magnitude gradient", lines, fixed = TRUE)
+  if (length(objective_i) && objective_i[[1]] < length(lines)) {
+    out[["objective"]] <- suppressWarnings(as.numeric(lines[[objective_i[[1]] + 1L]]))
+  }
+  if (length(gradient_i) && gradient_i[[1]] < length(lines)) {
+    out[["max_gradient"]] <- suppressWarnings(as.numeric(lines[[gradient_i[[1]] + 1L]]))
+  }
+  out
+}
+
+kflow_smoke_switch_args <- function(fevals = 1L, report = TRUE) {
+  switches <- c(
+    1, 1, as.integer(fevals),
+    1, 189, as.integer(isTRUE(report)),
+    1, 190, as.integer(isTRUE(report)),
+    1, 188, as.integer(isTRUE(report)),
+    1, 187, 0,
+    1, 186, 0
+  )
+  c("-switch", length(switches) / 3L, switches)
+}
+
 kflow_mfcl_log_summary <- function(log_file, out_dir, model_dir) {
   lines <- if (!is.null(log_file) && file.exists(log_file)) {
     readLines(log_file, warn = FALSE)
@@ -435,6 +487,95 @@ kflow_mfcl_log_summary <- function(log_file, out_dir, model_dir) {
   summary
 }
 
+kflow_write_smoke_model_info <- function(model_dir, stage, run_mode, program, frq, ini, input_par, output_par, footer, log_summary) {
+  info <- list(
+    payload_type = "kflow_smoke_model",
+    stage = stage,
+    description = kflow_env("JOB_DESCRIPTION", ""),
+    program_path = program,
+    frq_file = frq,
+    ini_file = ini,
+    par_in = input_par,
+    par_out = output_par,
+    base_dir = kflow_env("BASE_DIR", ""),
+    model_dir = kflow_env("MODEL_DIR", ""),
+    run_mode = run_mode,
+    smoke_fevals = suppressWarnings(as.integer(kflow_env("SMOKE_FEVALS", "1"))),
+    objective = footer[["objective"]],
+    obj_fun = footer[["objective"]],
+    max_gradient = footer[["max_gradient"]],
+    max_grad = footer[["max_gradient"]],
+    registry = kflow_registry_values(stage),
+    mfcl_log = as.list(log_summary[1, , drop = TRUE])
+  )
+  saveRDS(info, file.path(model_dir, "model_info.rds"), compress = "xz")
+  invisible(info)
+}
+
+kflow_try_build_mfclshiny_payload <- function(model_dir, out_dir, log_file = NULL) {
+  payload_file <- file.path(model_dir, "model_payload.rds")
+  if (requireNamespace("mfclshiny", quietly = TRUE) &&
+      "build_model_payload" %in% getNamespaceExports("mfclshiny")) {
+    status <- tryCatch({
+      mfclshiny::build_model_payload(model_dir, output_file = payload_file, overwrite = TRUE)
+      "mfclshiny_payload_ok"
+    }, error = function(e) {
+      paste("mfclshiny_payload_skipped:", conditionMessage(e))
+    })
+  } else {
+    status <- "mfclshiny_payload_unavailable"
+  }
+  writeLines(status, file.path(out_dir, "model-payload-status.txt"))
+  kflow_note("Model payload status: ", status, log_file = log_file)
+  file.exists(payload_file)
+}
+
+kflow_read_csv_file <- function(file) {
+  if (!file.exists(file)) {
+    return(data.frame())
+  }
+  tryCatch(utils::read.csv(file, stringsAsFactors = FALSE), error = function(e) data.frame())
+}
+
+kflow_write_fallback_payload <- function(out_dir, stage) {
+  payload <- list(
+    payload_type = "kflow_smoke_payload",
+    payload_version = 1L,
+    stage = stage,
+    registry = kflow_read_csv_file(file.path(out_dir, "model-registry.csv")),
+    summary = kflow_read_csv_file(file.path(out_dir, "kflow-job-summary.csv")),
+    smoke = kflow_read_csv_file(file.path(out_dir, "mfcl-smoke-summary.csv")),
+    diagnostics = kflow_read_csv_file(file.path(out_dir, "diagnostics-summary.csv")),
+    depletion = kflow_read_csv_file(file.path(out_dir, "depletion-smoke.csv")),
+    mfcl_log = kflow_read_csv_file(file.path(out_dir, "mfcl-log-summary.csv")),
+    created_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S %z")
+  )
+  saveRDS(payload, file.path(out_dir, "model_payload.rds"), compress = "xz")
+  invisible(payload)
+}
+
+kflow_write_stage_payload <- function(out_dir, stage, model_dir = "") {
+  model_payload <- if (nzchar(model_dir)) file.path(model_dir, "model_payload.rds") else ""
+  if (nzchar(model_payload) && file.exists(model_payload)) {
+    file.copy(model_payload, file.path(out_dir, "model_payload.rds"), overwrite = TRUE)
+  } else if (!file.exists(file.path(out_dir, "model_payload.rds"))) {
+    kflow_write_fallback_payload(out_dir, stage)
+  }
+  invisible(file.path(out_dir, "model_payload.rds"))
+}
+
+kflow_compact_outputs <- function(out_dir, keep = c("model_payload.rds", "model-registry.csv", "depletion-smoke.csv")) {
+  if (!kflow_bool("COMPACT_OUTPUTS", TRUE)) {
+    return(invisible(FALSE))
+  }
+  entries <- list.files(out_dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
+  remove <- entries[!basename(entries) %in% keep]
+  if (length(remove)) {
+    unlink(remove, recursive = TRUE, force = TRUE)
+  }
+  invisible(TRUE)
+}
+
 kflow_run_mfcl_smoke <- function(source_dir, out_dir, stage, log_file = NULL) {
   base_dir <- file.path(source_dir, kflow_env("BASE_DIR", kflow_env("FLOW_BASE_INPUT_DIR", "mfcl/inputs/2023_4region_1007")))
   model_dir <- file.path(source_dir, kflow_env("MODEL_DIR", file.path("model", kflow_env("JOB_KEY", "smoke"))))
@@ -466,22 +607,59 @@ kflow_run_mfcl_smoke <- function(source_dir, out_dir, stage, log_file = NULL) {
     }
     ini <- ini_candidates[[1]]
   }
-  par <- kflow_env("SMOKE_PAR", "00.par")
-  command <- paste(
-    shQuote(program),
-    shQuote(frq),
-    shQuote(ini),
-    shQuote(par),
-    "-makepar"
-  )
-  kflow_note("Running MFCL smoke makepar in ", model_dir, log_file = log_file)
+  input_par <- kflow_env("SMOKE_INPUT_PAR", kflow_env("SMOKE_PAR", "last"))
+  input_par <- if (tolower(input_par) %in% c("", "last", "latest")) kflow_latest_par(model_dir) else input_par
+  run_mode <- "last_par"
+  output_par_name <- kflow_env("SMOKE_OUTPUT_PAR", "")
+  if (nzchar(input_par)) {
+    if (!nzchar(output_par_name)) {
+      output_par_name <- paste0("smoke-", tools::file_path_sans_ext(basename(input_par)), ".par")
+    }
+    fevals <- suppressWarnings(as.integer(kflow_env("SMOKE_FEVALS", "1")))
+    if (!is.finite(fevals) || fevals < 1L) {
+      fevals <- 1L
+    }
+    command <- paste(
+      shQuote(program),
+      shQuote(frq),
+      shQuote(input_par),
+      shQuote(output_par_name),
+      paste(kflow_smoke_switch_args(fevals = fevals, report = TRUE), collapse = " ")
+    )
+    kflow_note("Running MFCL smoke from last par ", input_par, " in ", model_dir, log_file = log_file)
+  } else {
+    run_mode <- "makepar"
+    output_par_name <- kflow_env("SMOKE_OUTPUT_PAR", "00.par")
+    command <- paste(
+      shQuote(program),
+      shQuote(frq),
+      shQuote(ini),
+      shQuote(output_par_name),
+      "-makepar"
+    )
+    kflow_note("No input .par found; running MFCL smoke makepar in ", model_dir, log_file = log_file)
+  }
   kflow_run_shell(command, workdir = model_dir, log_file = log_file, sanitize_env = TRUE)
 
-  output_par <- file.path(model_dir, par)
+  output_par <- file.path(model_dir, output_par_name)
   if (!file.exists(output_par)) {
     stop(sprintf("MFCL smoke run did not create %s", output_par), call. = FALSE)
   }
   log_summary <- kflow_mfcl_log_summary(log_file, out_dir, model_dir)
+  footer <- kflow_par_footer(output_par)
+  info <- kflow_write_smoke_model_info(
+    model_dir = model_dir,
+    stage = stage,
+    run_mode = run_mode,
+    program = program,
+    frq = frq,
+    ini = ini,
+    input_par = input_par,
+    output_par = output_par_name,
+    footer = footer,
+    log_summary = log_summary
+  )
+  kflow_try_build_mfclshiny_payload(model_dir, out_dir, log_file = log_file)
   smoke <- data.frame(
     stage = stage,
     run_label = kflow_env("RUN_LABEL", ""),
@@ -492,17 +670,22 @@ kflow_run_mfcl_smoke <- function(source_dir, out_dir, stage, log_file = NULL) {
     input_dir = kflow_env("BASE_DIR", ""),
     model_dir = kflow_env("MODEL_DIR", ""),
     executable = basename(program),
+    run_mode = run_mode,
     frq = frq,
     ini = ini,
-    par = par,
+    input_par = input_par,
+    output_par = output_par_name,
     par_size = file.info(output_par)$size,
+    objective = info$objective,
+    max_gradient = info$max_gradient,
     mfcl_log_error_count = log_summary$error_count[[1]],
     mfcl_log_warning_count = log_summary$warning_count[[1]],
     stringsAsFactors = FALSE
   )
   utils::write.csv(smoke, file.path(model_dir, "mfcl-smoke-summary.csv"), row.names = FALSE)
   utils::write.csv(smoke, file.path(out_dir, "mfcl-smoke-summary.csv"), row.names = FALSE)
-  kflow_write_smoke_depletion(model_dir, stage)
+  depletion <- kflow_write_smoke_depletion(model_dir, stage)
+  utils::write.csv(depletion, file.path(out_dir, "depletion-smoke.csv"), row.names = FALSE)
   kflow_write_manifest(model_dir, file.path(model_dir, "model-manifest.csv"))
   invisible(smoke)
 }
@@ -510,7 +693,11 @@ kflow_run_mfcl_smoke <- function(source_dir, out_dir, stage, log_file = NULL) {
 kflow_run_diagnostics_smoke <- function(source_dir, out_dir, stage = "diagnostics", log_file = NULL) {
   model_dir <- file.path(source_dir, kflow_env("MODEL_DIR", file.path("model", kflow_env("JOB_KEY", "diagnostics"))))
   dir.create(model_dir, recursive = TRUE, showWarnings = FALSE)
-  depletion_files <- list.files(source_dir, pattern = "^depletion-smoke[.]csv$", recursive = TRUE, full.names = TRUE)
+  input_dir <- kflow_env("INPUT_DIR", "inputs")
+  search_roots <- unique(normalizePath(c(source_dir, input_dir), winslash = "/", mustWork = FALSE))
+  depletion_files <- unique(unlist(lapply(search_roots, function(root) {
+    list.files(root, pattern = "^depletion-smoke[.]csv$", recursive = TRUE, full.names = TRUE)
+  }), use.names = FALSE))
   depletion <- kflow_read_csv_union(depletion_files)
   if (nrow(depletion)) {
     parent <- depletion
@@ -539,6 +726,7 @@ kflow_run_diagnostics_smoke <- function(source_dir, out_dir, stage = "diagnostic
     depletion$model_role <- "diagnostics"
     utils::write.csv(depletion, file.path(model_dir, "depletion-smoke.csv"), row.names = FALSE)
   }
+  utils::write.csv(depletion, file.path(out_dir, "depletion-smoke.csv"), row.names = FALSE)
   final_year <- suppressWarnings(max(as.integer(depletion$year), na.rm = TRUE))
   final <- depletion[depletion$year == final_year & depletion$model_key == kflow_env("MODEL_KEY", kflow_env("JOB_KEY", "")), , drop = FALSE]
   diagnostics <- data.frame(
@@ -555,6 +743,19 @@ kflow_run_diagnostics_smoke <- function(source_dir, out_dir, stage = "diagnostic
   )
   utils::write.csv(diagnostics, file.path(model_dir, "diagnostics-summary.csv"), row.names = FALSE)
   utils::write.csv(diagnostics, file.path(out_dir, "diagnostics-summary.csv"), row.names = FALSE)
+  saveRDS(
+    list(
+      payload_type = "kflow_smoke_diagnostics",
+      payload_version = 1L,
+      stage = stage,
+      diagnostics = diagnostics,
+      depletion = depletion,
+      registry = kflow_registry_values(stage),
+      created_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S %z")
+    ),
+    file.path(model_dir, "model_payload.rds"),
+    compress = "xz"
+  )
   kflow_write_manifest(model_dir, file.path(model_dir, "model-manifest.csv"))
   kflow_note("Wrote diagnostics smoke summary from ", length(depletion_files), " depletion files.", log_file = log_file)
   invisible(diagnostics)

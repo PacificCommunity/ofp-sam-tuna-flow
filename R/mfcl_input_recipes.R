@@ -257,6 +257,9 @@ mfcl_recipe_remove_start_files <- function(input_dir) {
     file.path(input_dir, "indepvar.rpt")
   )
   files <- files[file.exists(files)]
+  if (!mfcl_recipe_bool(mfcl_recipe_env("INPUT_RECIPE_REMOVE_START_FILES", "1"), TRUE)) {
+    return(character())
+  }
   if (length(files)) {
     unlink(files, force = TRUE)
   }
@@ -568,12 +571,22 @@ mfcl_recipe_run <- function(input_dir,
                             ini_section_rows = "",
                             ini_section_cols = "",
                             ini_section_exact = FALSE,
+                            remove_start_files = TRUE,
                             out_dir = "") {
   input_dir <- normalizePath(input_dir, winslash = "/", mustWork = TRUE)
   output_dir <- mfcl_recipe_abs(output_dir, must_work = FALSE)
   in_place <- mfcl_recipe_same_path(input_dir, output_dir)
   work_dir <- if (in_place) tempfile("mfcl-recipe-input-") else output_dir
   mfcl_recipe_copy_dir(input_dir, work_dir, overwrite = TRUE)
+  old_remove_start_files <- Sys.getenv("INPUT_RECIPE_REMOVE_START_FILES", unset = NA_character_)
+  Sys.setenv(INPUT_RECIPE_REMOVE_START_FILES = if (isTRUE(remove_start_files)) "1" else "0")
+  on.exit({
+    if (is.na(old_remove_start_files)) {
+      Sys.unsetenv("INPUT_RECIPE_REMOVE_START_FILES")
+    } else {
+      Sys.setenv(INPUT_RECIPE_REMOVE_START_FILES = old_remove_start_files)
+    }
+  }, add = TRUE)
 
   actions <- character()
   if (isTRUE(normalize_ini)) {
@@ -654,6 +667,7 @@ mfcl_recipe_run_from_env <- function() {
     ini_section_rows = mfcl_recipe_env("INPUT_RECIPE_INI_SECTION_ROWS", ""),
     ini_section_cols = mfcl_recipe_env("INPUT_RECIPE_INI_SECTION_COLS", ""),
     ini_section_exact = mfcl_recipe_bool(mfcl_recipe_env("INPUT_RECIPE_INI_SECTION_EXACT", "0"), FALSE),
+    remove_start_files = mfcl_recipe_bool(mfcl_recipe_env("INPUT_RECIPE_REMOVE_START_FILES", "1"), TRUE),
     out_dir = mfcl_recipe_env("KFLOW_PATCH_OUT_DIR", "")
   )
 }

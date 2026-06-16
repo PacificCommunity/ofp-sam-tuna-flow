@@ -54,14 +54,29 @@ if (identical(plot_backend, "mfclshiny") && nzchar(kflow_env("MFCLSHINY_SCRIPT",
   dev.off()
 }
 
+mfclshiny_status_file <- file.path(ctx$out_dir, "mfclshiny-status.txt")
+mfclshiny_status <- if (file.exists(mfclshiny_status_file)) {
+  paste(readLines(mfclshiny_status_file, warn = FALSE), collapse = " ")
+} else {
+  ""
+}
+report_figure <- if (file.exists(file.path(ctx$out_dir, "report-figures", "depletion-smoke.png"))) {
+  "report-figures/depletion-smoke.png"
+} else if (file.exists(file.path(ctx$out_dir, "depletion-smoke.png"))) {
+  "depletion-smoke.png"
+} else {
+  ""
+}
 plot_summary <- data.frame(
   run_label = kflow_env("RUN_LABEL", ""),
   job_key = kflow_env("JOB_KEY", ""),
   plot_backend = plot_backend,
+  mfclshiny_status = mfclshiny_status,
   input_registry_rows = nrow(registries),
   input_summary_rows = nrow(summaries),
   input_manifest_rows = nrow(manifests),
   plot_file = "model-exploration-overview.svg",
+  report_figure = report_figure,
   stringsAsFactors = FALSE
 )
 utils::write.csv(plot_summary, file.path(ctx$out_dir, "plot-summary.csv"), row.names = FALSE)

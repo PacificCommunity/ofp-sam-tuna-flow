@@ -165,7 +165,7 @@ build_base_model_rows <- function(base_dirs = flow_base_input_dirs) {
       BASE_MODEL_KEY = "",
       CHANGE_TOKEN = token,
       CHANGE_GROUP = "base",
-      CHANGE_SUMMARY = paste("Runs", input_variant, flow_species_label, "MFCL input through a fast makepar smoke check."),
+      CHANGE_SUMMARY = paste("Runs", input_variant, flow_species_label, "MFCL input through a fast last-par smoke check."),
       INPUT_VARIANT = input_variant,
       SOURCE_REPO = flow_source_repo,
       SOURCE_REF = flow_source_ref,
@@ -184,7 +184,7 @@ build_base_model_rows <- function(base_dirs = flow_base_input_dirs) {
       RECIPE_FAMILY = "base",
       RECIPE_LABEL = "Base input",
       JOB_TITLE = paste(flow_assessment_label, "base:", input_variant, "smoke"),
-      JOB_DESCRIPTION = paste("Normalizes the included", input_variant, flow_species_label, "input to MFCL .ini", flow_ini_version_target, "and runs a fast MFCL smoke check."),
+      JOB_DESCRIPTION = paste("Normalizes the included", input_variant, flow_species_label, "input to MFCL .ini", flow_ini_version_target, "and runs a fast MFCL last-par smoke check."),
       MAKE_TARGETS = "mfcl-smoke",
       BASE_DIR = base_dir,
       MODEL_DIR = model_dir,
@@ -203,9 +203,9 @@ mfcl_input_recipe_library <- data.frame(
   INPUT_VARIANT_SUFFIX = c("fixM", "fixVB", "fixM_fixVB", "sel4", "index_cv_half", "tag_mix2", "tag_rep_half", "m_half"),
   PATCH_SCRIPT = "scripts/run-mfcl-input-recipe.R",
   CHANGE_DETAIL = c(
-    "Sets MFCL estimation switch 121 to zero in doitall.sh and removes stale start files.",
-    "Sets MFCL estimation switches 12, 13, and 14 to zero in doitall.sh and removes stale start files.",
-    "Sets MFCL estimation switches 121, 12, 13, and 14 to zero in doitall.sh and removes stale start files.",
+    "Sets MFCL estimation switch 121 to zero in doitall.sh while preserving the start .par for smoke evaluation.",
+    "Sets MFCL estimation switches 12, 13, and 14 to zero in doitall.sh while preserving the start .par for smoke evaluation.",
+    "Sets MFCL estimation switches 121, 12, 13, and 14 to zero in doitall.sh while preserving the start .par for smoke evaluation.",
     "Sets fish flag 61 selectivity spline nodes to 4 in doitall.sh.",
     "Halves negative-fishery fish flag 92 index CV values in doitall.sh.",
     "Converts the .ini to version 1007 if needed and sets tag mixing period flag 1 to 2.",
@@ -289,7 +289,7 @@ build_sensitivity_rows <- function(bases, recipes) {
         CHANGE_TOKEN = recipe$RECIPE_TOKEN,
         CHANGE_GROUP = recipe$RECIPE_FAMILY,
         CHANGE_DETAIL = recipe$CHANGE_DETAIL,
-        CHANGE_SUMMARY = paste(recipe$CHANGE_DETAIL, "Runs a fast makepar smoke check."),
+        CHANGE_SUMMARY = paste(recipe$CHANGE_DETAIL, "Runs a fast last-par smoke check."),
         INPUT_VARIANT = input_variant,
         INPUT_TASK = "",
         INPUT_KEY = "",
@@ -306,7 +306,7 @@ build_sensitivity_rows <- function(bases, recipes) {
         PATCH_INPUT_DIR = base$BASE_DIR,
         PATCH_OUTPUT_DIR = base_dir,
         JOB_TITLE = paste("Sensitivity:", recipe$RECIPE_TOKEN),
-        JOB_DESCRIPTION = paste("Builds", recipe$RECIPE_LABEL, "from", base$MODEL_TOKEN, "input settings and runs a fast MFCL smoke check."),
+        JOB_DESCRIPTION = paste("Builds", recipe$RECIPE_LABEL, "from", base$MODEL_TOKEN, "input settings and runs a fast MFCL last-par smoke check."),
         COLLECT_PATHS = paste(model_dir, base_dir, sep = ","),
         stringsAsFactors = FALSE
       )
@@ -474,6 +474,16 @@ common_env <- function(rows) {
   rows$MFCLKIT_SCRIPT <- if ("MFCLKIT_SCRIPT" %in% names(rows)) rows$MFCLKIT_SCRIPT else ""
   rows$MFCLSHINY_SCRIPT <- if ("MFCLSHINY_SCRIPT" %in% names(rows)) rows$MFCLSHINY_SCRIPT else ""
   rows$PROGRAM_PATH <- if ("PROGRAM_PATH" %in% names(rows)) rows$PROGRAM_PATH else flow_default_program
+  rows$COMPACT_OUTPUTS <- if ("COMPACT_OUTPUTS" %in% names(rows)) rows$COMPACT_OUTPUTS else "true"
+  rows$COLLECT_SOURCE_ARTIFACTS <- if ("COLLECT_SOURCE_ARTIFACTS" %in% names(rows)) rows$COLLECT_SOURCE_ARTIFACTS else "false"
+  rows$SMOKE_INPUT_PAR <- if ("SMOKE_INPUT_PAR" %in% names(rows)) rows$SMOKE_INPUT_PAR else "last"
+  rows$SMOKE_OUTPUT_PAR <- if ("SMOKE_OUTPUT_PAR" %in% names(rows)) rows$SMOKE_OUTPUT_PAR else ""
+  rows$SMOKE_FEVALS <- if ("SMOKE_FEVALS" %in% names(rows)) rows$SMOKE_FEVALS else "1"
+  rows$INPUT_RECIPE_REMOVE_START_FILES <- if ("INPUT_RECIPE_REMOVE_START_FILES" %in% names(rows)) {
+    rows$INPUT_RECIPE_REMOVE_START_FILES
+  } else {
+    ifelse(tolower(rows$MFCL_BACKEND) == "mfcl_smoke", "0", "1")
+  }
   rows$FLOW_GROUP <- if ("FLOW_GROUP" %in% names(rows)) rows$FLOW_GROUP else flow_flow_group
   rows$FLOW_SPECIES <- if ("FLOW_SPECIES" %in% names(rows)) rows$FLOW_SPECIES else flow_species
   rows$FLOW_SPECIES_LABEL <- if ("FLOW_SPECIES_LABEL" %in% names(rows)) rows$FLOW_SPECIES_LABEL else flow_species_label
