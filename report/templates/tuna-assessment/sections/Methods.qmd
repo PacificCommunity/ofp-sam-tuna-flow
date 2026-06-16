@@ -1,5 +1,5 @@
 ---
-bibliography: ../bet-2026.bib
+bibliography: ../references.bib
 ---
 
 # Methods

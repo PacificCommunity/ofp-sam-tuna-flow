@@ -54,7 +54,7 @@ format:
     highlight-style: github
     self-contained: true
     css: styles.css
-bibliography: bet-2026.bib
+bibliography: references.bib
 csl: apa.csl
 
 ---
