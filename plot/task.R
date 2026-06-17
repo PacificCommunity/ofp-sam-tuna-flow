@@ -80,6 +80,14 @@ report_figures <- if (dir.exists(report_figure_dir)) {
 } else {
   character()
 }
+report_metadata <- if (dir.exists(report_figure_dir)) {
+  file.path(
+    "report-figures",
+    list.files(report_figure_dir, pattern = "[.]csv$", recursive = TRUE, full.names = FALSE, ignore.case = TRUE)
+  )
+} else {
+  character()
+}
 figure_priority <- function(path) {
   if (grepl("key-quantities-smoke[.]png$", path, ignore.case = TRUE)) return(1L)
   if (grepl("depletion-smoke[.]png$", path, ignore.case = TRUE)) return(2L)
@@ -115,6 +123,7 @@ kflow_write_registry(ctx$out_dir, "plot")
 kflow_write_summary(ctx$out_dir, "plot")
 plot_keep <- c("plot-summary.csv", "model-registry.csv")
 plot_keep <- c(plot_keep, if (length(report_figures)) report_figures else if (nzchar(plot_file)) plot_file else character())
+plot_keep <- c(plot_keep, report_metadata)
 kflow_compact_outputs(
   ctx$out_dir,
   keep = plot_keep

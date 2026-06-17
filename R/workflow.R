@@ -87,7 +87,7 @@ flow_source_ref <- flow_env_any(c("FLOW_SOURCE_REF", "TUNA_FLOW_SOURCE_REF"), "m
 flow_source_path <- flow_env_any(c("FLOW_SOURCE_PATH", "TUNA_FLOW_SOURCE_PATH", "SOURCE_PATH"), "")
 flow_report_repo <- flow_env_any(c("FLOW_REPORT_REPO", "TUNA_FLOW_REPORT_REPO"), "PacificCommunity/ofp-sam-bet2026-report")
 flow_report_ref <- flow_env_any(c("FLOW_REPORT_REF", "TUNA_FLOW_REPORT_REF"), "main")
-flow_report_path <- flow_env_any(c("FLOW_REPORT_PATH", "TUNA_FLOW_REPORT_PATH"), "report")
+flow_report_path <- flow_env_any(c("FLOW_REPORT_PATH", "TUNA_FLOW_REPORT_PATH"), "bet-2026-report")
 flow_report_main <- flow_env_any(c("FLOW_REPORT_MAIN", "TUNA_FLOW_REPORT_MAIN"), "assessment-report.qmd")
 flow_docker_image <- flow_env_any(
   c("FLOW_DOCKER_IMAGE", "TUNA_FLOW_DOCKER_IMAGE"),
@@ -432,7 +432,7 @@ report_runs <- data.frame(
   JOB_DESCRIPTION = "Renders a Quarto report from the selected key quantity figure package.",
   INPUT_TASK = flow_task_codes[["plot"]],
   INPUT_KEY = "plot-key-quantities-smoke",
-  REPORT_TITLE = paste(flow_assessment_label, "key quantities smoke report"),
+  REPORT_TITLE = flow_report_file_stem,
   REPORT_FILE_STEM = flow_report_file_stem,
   REPORT_SOURCE_REPO = flow_report_repo,
   REPORT_SOURCE_REF = flow_report_ref,

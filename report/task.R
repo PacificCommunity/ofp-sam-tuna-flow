@@ -152,6 +152,7 @@ if (nzchar(title) && file.exists(report_config_file)) {
     report_config_file,
     c(
       title = title,
+      species_code = kflow_env("FLOW_SPECIES", ""),
       species = kflow_env("FLOW_SPECIES", ""),
       species_label = kflow_env("FLOW_SPECIES_LABEL", ""),
       assessment_year = kflow_env("FLOW_ASSESSMENT_YEAR", "")
@@ -190,16 +191,28 @@ copied_sources <- character()
 if (nrow(plot_index)) {
   for (index in seq_len(nrow(plot_index))) {
     source_file <- plot_index$file[[index]]
-    target <- if (index == 1L && grepl("key-quantities-smoke[.]png$", source_file, ignore.case = TRUE)) {
-      "key-quantities-smoke.png"
-    } else if (index == 1L && grepl("depletion-smoke[.]png$", source_file, ignore.case = TRUE)) {
-      "depletion-smoke.png"
-    } else {
-      sprintf("plot-%03d.%s", index, tools::file_ext(source_file))
+    target <- basename(source_file)
+    target_path <- file.path(plot_dir, target)
+    if (file.exists(target_path) && !identical(normalizePath(source_file, winslash = "/", mustWork = FALSE), normalizePath(target_path, winslash = "/", mustWork = FALSE))) {
+      target <- sprintf("plot-%03d.%s", index, tools::file_ext(source_file))
     }
     file.copy(source_file, file.path(plot_dir, target), overwrite = TRUE)
     copied <- c(copied, file.path(figure_dir_setting, target))
     copied_sources <- c(copied_sources, plot_index$rel[[index]])
+  }
+}
+
+figure_metadata_files <- list.files(
+  ctx$input_dir,
+  pattern = "figure-index[.]csv$|mfclshiny-figure-index[.]csv$",
+  recursive = TRUE,
+  full.names = TRUE,
+  ignore.case = TRUE
+)
+if (length(figure_metadata_files)) {
+  for (metadata_file in figure_metadata_files) {
+    target <- basename(metadata_file)
+    file.copy(metadata_file, file.path(plot_dir, target), overwrite = TRUE)
   }
 }
 

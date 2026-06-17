@@ -85,8 +85,13 @@ if (isTRUE(package_status$available[package_status$package == "mfclshiny"]) &&
       title = plot_title,
       figure_basename = "key-quantities-smoke",
       formats = c("png", "pdf", "svg"),
+      width = 12,
+      height = 8,
+      dpi = 300,
       build_payloads = FALSE,
-      overwrite = TRUE
+      overwrite = TRUE,
+      species_label = Sys.getenv("FLOW_SPECIES_LABEL", "selected stock"),
+      assessment_year = Sys.getenv("FLOW_ASSESSMENT_YEAR", "")
     )
     svg_src <- file.path(mfclshiny_figure_dir, "key-quantities-smoke.svg")
     png_src <- file.path(mfclshiny_figure_dir, "key-quantities-smoke.png")
