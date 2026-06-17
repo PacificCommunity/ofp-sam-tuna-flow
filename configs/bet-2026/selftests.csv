@@ -1,6 +1,6 @@
-RECIPE_TOKEN,RECIPE_KEY,RECIPE_LABEL,SELFTEST_MODE,SELFTEST_SEED,RETRO_PEEL,LIKPROF_TARGET,CHANGE_DETAIL,MFCL_BACKEND,MAKE_TARGETS
-check,check,Check,selftest,1000,,,Check upstream payloads and key quantities.,selftest,selftest
-jitter,jitter,Jitter,jitter,2000,,,Seeded jitter-style output comparison.,selftest,selftest
-retro,retro,Retro,retro,3000,1,,Retrospective-style output comparison.,selftest,selftest
-hessian,hessian,Hessian,hessian,4000,,,Hessian availability and summary check.,selftest,selftest
-likprof,likprof,Likprof,likprof,5000,,depletion,Likelihood-profile conflict summary hook.,selftest,selftest
+RECIPE_TOKEN,RECIPE_KEY,RECIPE_FAMILY,RECIPE_LABEL,SELFTEST_MODE,SELFTEST_SEED,RETRO_PEEL,LIKPROF_TARGET,CHANGE_DETAIL,MFCL_BACKEND,MAKE_TARGETS
+check,check,selftest,Check,selftest,1000,,,Check upstream payloads and key quantities.,selftest,selftest
+jitter,jitter,jitter,Jitter,jitter,2000,,,Seeded jitter-style output comparison.,selftest,selftest
+retro,retro,retro,Retro,retro,3000,1,,Retrospective-style output comparison.,selftest,selftest
+hessian,hessian,hessian,Hessian,hessian,4000,,,Hessian availability and summary check.,selftest,selftest
+likprof,likprof,likprof,Likprof,likprof,5000,,depletion,Likelihood-profile conflict summary hook.,selftest,selftest

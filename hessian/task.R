@@ -1,0 +1,1 @@
+source("../selftest/task.R")

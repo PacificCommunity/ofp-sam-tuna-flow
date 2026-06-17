@@ -481,7 +481,7 @@ kflow_write_smoke_depletion <- function(target_dir, stage) {
   region_offset <- stats::setNames(c(0.025, 0.005, -0.010, -0.025), regions)
   token <- kflow_env("CHANGE_TOKEN", kflow_env("MODEL_TOKEN", "Base"))
   token_offset <- (sum(utf8ToInt(token)) %% 7) / 200
-  stage_offset <- switch(stage, base = 0, sensitivity = -0.025, diagnostics = 0.010, 0)
+  stage_offset <- switch(stage, base = 0, sensitivity = -0.025, selftest = 0.010, jitter = 0.012, retro = -0.004, hessian = 0.006, likprof = 0.003, diagnostics = 0.010, 0)
   value <- trend[as.character(grid$year)] + region_offset[grid$region] + token_offset + stage_offset
   grid$depletion <- round(pmax(0.05, pmin(0.95, as.numeric(value))), 3)
   grid$stage <- stage
@@ -1401,7 +1401,7 @@ kflow_run_mfcl_smoke <- function(source_dir, out_dir, stage, log_file = NULL) {
   invisible(smoke)
 }
 
-kflow_run_diagnostics_smoke <- function(source_dir, out_dir, stage = "diagnostics", log_file = NULL) {
+kflow_run_selftest <- function(source_dir, out_dir, stage = "selftest", log_file = NULL) {
   backend <- tolower(kflow_env("MFCL_BACKEND", "diagnostics_smoke"))
   mode <- tolower(kflow_env("SELFTEST_MODE", if (identical(backend, "selftest")) "summary" else "jitter"))
   mode_label <- switch(
@@ -1417,7 +1417,7 @@ kflow_run_diagnostics_smoke <- function(source_dir, out_dir, stage = "diagnostic
     summary = "selftest",
     mode
   )
-  model_dir <- file.path(source_dir, kflow_env("MODEL_DIR", file.path("model", kflow_env("JOB_KEY", "diagnostics"))))
+  model_dir <- file.path(source_dir, kflow_env("MODEL_DIR", file.path("model", stage, kflow_env("JOB_KEY", stage))))
   dir.create(model_dir, recursive = TRUE, showWarnings = FALSE)
   input_dir <- kflow_env("INPUT_DIR", "inputs")
   search_roots <- unique(normalizePath(c(source_dir, input_dir), winslash = "/", mustWork = FALSE))
@@ -1488,12 +1488,14 @@ kflow_run_diagnostics_smoke <- function(source_dir, out_dir, stage = "diagnostic
   utils::write.csv(depletion, file.path(out_dir, "depletion-smoke.csv"), row.names = FALSE)
   final_year <- suppressWarnings(max(as.integer(depletion$year), na.rm = TRUE))
   final <- depletion[depletion$year == final_year & depletion$model_key == kflow_env("MODEL_KEY", kflow_env("JOB_KEY", "")), , drop = FALSE]
-  diagnostics <- data.frame(
+  validation_summary <- data.frame(
     stage = stage,
+    validation_stage = kflow_env("VALIDATION_STAGE", stage),
     run_label = kflow_env("RUN_LABEL", ""),
     job_key = kflow_env("JOB_KEY", ""),
     parent_task = kflow_env("INPUT_TASK", ""),
     parent_key = kflow_env("INPUT_KEY", ""),
+    validation = kflow_env("CHANGE_TOKEN", "Selftest"),
     diagnostic = kflow_env("CHANGE_TOKEN", "Selftest"),
     selftest_mode = mode_label,
     selftest_seed = suppressWarnings(as.integer(kflow_env("SELFTEST_SEED", kflow_env("JITTER_SEED", "40")))),
@@ -1502,16 +1504,17 @@ kflow_run_diagnostics_smoke <- function(source_dir, out_dir, stage = "diagnostic
     input_depletion_files = length(depletion_files),
     stringsAsFactors = FALSE
   )
-  utils::write.csv(diagnostics, file.path(model_dir, "diagnostics-summary.csv"), row.names = FALSE)
-  utils::write.csv(diagnostics, file.path(out_dir, "diagnostics-summary.csv"), row.names = FALSE)
-  utils::write.csv(diagnostics, file.path(model_dir, "selftest-summary.csv"), row.names = FALSE)
-  utils::write.csv(diagnostics, file.path(out_dir, "selftest-summary.csv"), row.names = FALSE)
+  utils::write.csv(validation_summary, file.path(model_dir, "diagnostics-summary.csv"), row.names = FALSE)
+  utils::write.csv(validation_summary, file.path(out_dir, "diagnostics-summary.csv"), row.names = FALSE)
+  utils::write.csv(validation_summary, file.path(model_dir, "selftest-summary.csv"), row.names = FALSE)
+  utils::write.csv(validation_summary, file.path(out_dir, "selftest-summary.csv"), row.names = FALSE)
   saveRDS(
     list(
       payload_type = "kflow_selftest",
       payload_version = 1L,
       stage = stage,
-      diagnostics = diagnostics,
+      validation = validation_summary,
+      diagnostics = validation_summary,
       depletion = depletion,
       registry = kflow_registry_values(stage),
       created_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S %z")
@@ -1520,8 +1523,12 @@ kflow_run_diagnostics_smoke <- function(source_dir, out_dir, stage = "diagnostic
     compress = "xz"
   )
   kflow_write_manifest(model_dir, file.path(model_dir, "model-manifest.csv"))
-  kflow_note("Wrote ", mode_label, " selftest summary from ", length(depletion_files), " depletion files.", log_file = log_file)
-  invisible(diagnostics)
+  kflow_note("Wrote ", mode_label, " validation summary from ", length(depletion_files), " depletion files.", log_file = log_file)
+  invisible(validation_summary)
+}
+
+kflow_run_diagnostics_smoke <- function(source_dir, out_dir, stage = "selftest", log_file = NULL) {
+  kflow_run_selftest(source_dir, out_dir, stage = stage, log_file = log_file)
 }
 
 kflow_patch_script_path <- function(script) {
@@ -1604,9 +1611,9 @@ kflow_run_backend <- function(source_dir, out_dir, stage, log_file = NULL) {
   } else if (identical(backend, "mfcl_full")) {
     kflow_run_mfcl_full(source_dir, out_dir, stage, log_file = log_file)
   } else if (identical(backend, "diagnostics_smoke")) {
-    kflow_run_diagnostics_smoke(source_dir, out_dir, stage, log_file = log_file)
+    kflow_run_selftest(source_dir, out_dir, stage, log_file = log_file)
   } else if (identical(backend, "selftest")) {
-    kflow_run_diagnostics_smoke(source_dir, out_dir, stage, log_file = log_file)
+    kflow_run_selftest(source_dir, out_dir, stage, log_file = log_file)
   } else if (identical(backend, "mfclrtmb")) {
     command <- kflow_env("BACKEND_COMMAND", "")
     script <- kflow_env("BACKEND_SCRIPT", "")

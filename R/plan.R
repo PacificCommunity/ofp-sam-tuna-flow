@@ -2,7 +2,7 @@
 #
 # Use this file when the number of models grows beyond a few hand-written rows.
 # It builds stage tables from recipes:
-#   base rows x sensitivity recipes x diagnostic recipes -> plot/report rows
+#   base rows x sensitivity recipes x validation recipes -> plot/report rows
 #
 # Kflow still handles dependencies. This file only creates readable data.frames
 # with JOB_KEY, INPUT_TASK, and INPUT_KEY columns.
@@ -81,19 +81,34 @@ plan_nonempty <- function(value, default = "") {
   as.character(value[[1]])
 }
 
+plan_split_validation_rows <- function(rows) {
+  if (!is.data.frame(rows) || !nrow(rows) || !"VALIDATION_STAGE" %in% names(rows)) {
+    return(list())
+  }
+  stages <- if (exists("flow_validation_tasks", inherits = TRUE)) {
+    get("flow_validation_tasks", inherits = TRUE)
+  } else {
+    c("selftest", "jitter", "retro", "hessian", "likprof")
+  }
+  stats::setNames(lapply(stages, function(stage) {
+    rows[rows$VALIDATION_STAGE == stage, , drop = FALSE]
+  }), stages)
+}
+
 build_starter_plan <- function() {
-  list(
+  validation <- plan_split_validation_rows(validation_runs)
+  c(list(
     base = common_env(base_models),
-    sensitivity = common_env(sensitivity_models),
-    diagnostics = common_env(diagnostics_runs),
+    sensitivity = common_env(sensitivity_models)
+  ), lapply(validation, common_env), list(
     plot = common_env(plot_runs),
     report = common_env(report_runs)
-  )
+  ))
 }
 
 build_recipe_plan <- function(bases = base_models,
                               sensitivity_recipes = starter_sensitivity_recipes,
-                              diagnostics_recipes = starter_diagnostics_recipes,
+                              diagnostics_recipes = starter_selftest_recipes,
                               plots = plot_runs,
                               reports = report_runs,
                               include_base_diagnostics = TRUE,
@@ -109,7 +124,7 @@ build_recipe_plan <- function(bases = base_models,
     plan_task_code("base"),
     plan_task_code("sensitivity")
   )
-  diagnostic_rows <- common_env(build_diagnostics_rows(
+  diagnostic_rows <- common_env(build_selftest_rows(
     diagnostic_inputs,
     diagnostics_recipes,
     diagnostic_input_tasks
@@ -117,20 +132,21 @@ build_recipe_plan <- function(bases = base_models,
   plots <- common_env(plots)
   reports <- common_env(reports)
   if (nrow(plots) && nrow(diagnostic_rows)) {
-    plots$INPUT_TASK <- plan_task_code("diagnostics")
+    plots$INPUT_TASK <- paste(diagnostic_rows$VALIDATION_TASK_CODE, collapse = ",")
     plots$INPUT_KEY <- paste(diagnostic_rows$JOB_KEY, collapse = ",")
   }
   if (nrow(reports) && nrow(plots)) {
     reports$INPUT_TASK <- plan_task_code("plot")
     reports$INPUT_KEY <- paste(plots$JOB_KEY, collapse = ",")
   }
-  list(
+  validation <- plan_split_validation_rows(diagnostic_rows)
+  c(list(
     base = bases,
-    sensitivity = sensitivity_rows,
-    diagnostics = diagnostic_rows,
+    sensitivity = sensitivity_rows
+  ), lapply(validation, common_env), list(
     plot = plots,
     report = reports
-  )
+  ))
 }
 
 diagnostic_recipes <- function() {
@@ -460,7 +476,11 @@ default_yaml_paths <- function() {
   c(
     base = "base/kflow.yaml",
     sensitivity = "sensitivity/kflow.yaml",
-    diagnostics = "diagnostics/kflow.yaml",
+    selftest = "selftest/kflow.yaml",
+    jitter = "jitter/kflow.yaml",
+    retro = "retro/kflow.yaml",
+    hessian = "hessian/kflow.yaml",
+    likprof = "likprof/kflow.yaml",
     plot = "plot/kflow.yaml",
     report = "report/kflow.yaml"
   )

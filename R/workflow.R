@@ -2,7 +2,7 @@
 #
 # This is the main file to edit day to day.
 # - Edit the tables near the top to add/remove base models, sensitivities,
-#   diagnostics, plot jobs, or reports.
+#   selftests, plot jobs, or reports.
 # - Use the launch_*() functions near the bottom to submit jobs to Kflow.
 # - Keep heavy job internals in R/job_helpers.R and large combinatorics in
 #   R/plan.R so this file stays readable.
@@ -174,9 +174,21 @@ flow_model_make_targets <- flow_env_any(
   c("FLOW_MODEL_MAKE_TARGETS", "TUNA_FLOW_MODEL_MAKE_TARGETS"),
   if (identical(flow_model_backend, "mfcl_full")) "mfcl-full" else "mfcl-smoke"
 )
-flow_task_codes <- setNames(paste(flow_task_prefix, c("base", "sensitivity", "selftest", "plot", "report"), sep = "-"), c(
-  "base", "sensitivity", "diagnostics", "plot", "report"
-))
+flow_validation_tasks <- c("selftest", "jitter", "retro", "hessian", "likprof")
+flow_task_names <- c("base", "sensitivity", flow_validation_tasks, "plot", "report")
+flow_task_codes <- setNames(paste(flow_task_prefix, flow_task_names, sep = "-"), flow_task_names)
+flow_task_labels <- c(
+  base = "Base model",
+  sensitivity = "Sensitivity",
+  selftest = "Model selftest",
+  jitter = "Jitter",
+  retro = "Retro",
+  hessian = "Hessian",
+  likprof = "Likprof",
+  plot = "Report figures",
+  report = "Assessment report"
+)
+flow_task_codes[["diagnostics"]] <- flow_task_codes[["selftest"]]
 flow_task_codes[["report"]] <- flow_env_any(
   c("FLOW_REPORT_TASK_CODE", "TUNA_FLOW_REPORT_TASK_CODE"),
   paste(flow_task_prefix, "report", sep = "-")
@@ -408,7 +420,7 @@ starter_sensitivity_recipes <- if (nrow(flow_sensitivity_specs)) {
 selftest_recipe_library <- data.frame(
   RECIPE_TOKEN = c("check", "jitter", "retro", "hessian", "likprof"),
   RECIPE_KEY = c("check", "jitter", "retro", "hessian", "likprof"),
-  RECIPE_FAMILY = "selftest",
+  RECIPE_FAMILY = c("selftest", "jitter", "retro", "hessian", "likprof"),
   RECIPE_LABEL = c("Check", "Jitter", "Retro", "Hessian", "Likprof"),
   CHANGE_DETAIL = c(
     "Checks that upstream model payloads, summaries, and key quantities are readable.",
@@ -425,7 +437,7 @@ selftest_recipe_library <- data.frame(
   stringsAsFactors = FALSE
 )
 flow_selftest_specs <- flow_read_table("selftests.csv", c("FLOW_SELFTESTS_CSV", "TUNA_FLOW_SELFTESTS_CSV"))
-starter_diagnostics_recipes <- if (nrow(flow_selftest_specs)) {
+starter_selftest_recipes <- if (nrow(flow_selftest_specs)) {
   flow_merge_recipe_specs(selftest_recipe_library, flow_selftest_specs)
 } else {
   selftest_recipe_library[
@@ -503,7 +515,7 @@ build_sensitivity_rows <- function(bases, recipes) {
   do.call(rbind, rows)
 }
 
-build_diagnostics_rows <- function(parent_rows, recipes, input_task) {
+build_selftest_rows <- function(parent_rows, recipes, input_task) {
   if (!nrow(parent_rows) || !nrow(recipes)) {
     return(data.frame())
   }
@@ -517,7 +529,14 @@ build_diagnostics_rows <- function(parent_rows, recipes, input_task) {
       if (!is.finite(seed_base)) seed_base <- 1000L
       seed <- seed_base + parent_index - 1L
       selftest_mode <- flow_first_col(recipe, c("SELFTEST_MODE", "MODE", "mode"), recipe$RECIPE_KEY)
-      job_key <- paste("selftest", parent$MODEL_TOKEN, recipe$RECIPE_KEY, sep = "-")
+      validation_stage <- tolower(flow_first_col(recipe, c("VALIDATION_STAGE", "RECIPE_FAMILY", "SELFTEST_MODE", "MODE"), selftest_mode))
+      validation_stage <- if (validation_stage %in% flow_validation_tasks) validation_stage else "selftest"
+      validation_code <- flow_task_codes[[validation_stage]]
+      job_key <- if (identical(validation_stage, "selftest")) {
+        paste("selftest", parent$MODEL_TOKEN, recipe$RECIPE_KEY, sep = "-")
+      } else {
+        paste(validation_stage, parent$MODEL_TOKEN, sep = "-")
+      }
       job_key <- gsub("[^A-Za-z0-9_-]+", "-", job_key)
       model_token <- paste(parent$MODEL_TOKEN, recipe$RECIPE_TOKEN, sep = "_")
       rows[[length(rows) + 1L]] <- data.frame(
@@ -536,9 +555,11 @@ build_diagnostics_rows <- function(parent_rows, recipes, input_task) {
         RECIPE_FAMILY = recipe$RECIPE_FAMILY,
         RECIPE_LABEL = recipe$RECIPE_LABEL,
         CHANGE_TOKEN = recipe$RECIPE_TOKEN,
-        CHANGE_GROUP = "selftest",
+        CHANGE_GROUP = validation_stage,
         CHANGE_DETAIL = recipe$CHANGE_DETAIL,
         CHANGE_SUMMARY = paste(recipe$CHANGE_DETAIL, "Parent:", parent$MODEL_TOKEN),
+        VALIDATION_STAGE = validation_stage,
+        VALIDATION_TASK_CODE = validation_code,
         INPUT_VARIANT = parent$INPUT_VARIANT %||% "",
         INPUT_TASK = parent_input_task,
         INPUT_KEY = parent$JOB_KEY,
@@ -550,7 +571,7 @@ build_diagnostics_rows <- function(parent_rows, recipes, input_task) {
         PROGRAM_PATH = parent$PROGRAM_PATH %||% flow_default_program,
         MAKE_TARGETS = recipe$MAKE_TARGETS,
         BASE_DIR = parent$BASE_DIR %||% "",
-        MODEL_DIR = file.path("model", job_key),
+        MODEL_DIR = file.path("model", validation_stage, job_key),
         SELFTEST_MODE = selftest_mode,
         SELFTEST_SEED = seed,
         JITTER_SEED = seed,
@@ -560,9 +581,9 @@ build_diagnostics_rows <- function(parent_rows, recipes, input_task) {
         PATCH_SCRIPT = "",
         PATCH_INPUT_DIR = "",
         PATCH_OUTPUT_DIR = "",
-        JOB_TITLE = paste("Selftest:", parent$MODEL_TOKEN, recipe$RECIPE_TOKEN),
+        JOB_TITLE = paste(flow_task_labels[[validation_stage]], ":", parent$MODEL_TOKEN),
         JOB_DESCRIPTION = paste(recipe$RECIPE_LABEL, "check for", parent$MODEL_TOKEN, "seed", seed),
-        COLLECT_PATHS = file.path("model", job_key),
+        COLLECT_PATHS = file.path("model", validation_stage, job_key),
         stringsAsFactors = FALSE
       )
     }
@@ -572,10 +593,19 @@ build_diagnostics_rows <- function(parent_rows, recipes, input_task) {
 
 sensitivity_models <- build_sensitivity_rows(base_models, starter_sensitivity_recipes)
 
-diagnostics_runs <- flow_bind_rows(
-  build_diagnostics_rows(base_models, starter_diagnostics_recipes, flow_task_codes[["base"]]),
-  build_diagnostics_rows(sensitivity_models, starter_diagnostics_recipes, flow_task_codes[["sensitivity"]])
+validation_runs <- flow_bind_rows(
+  build_selftest_rows(base_models, starter_selftest_recipes, flow_task_codes[["base"]]),
+  build_selftest_rows(sensitivity_models, starter_selftest_recipes, flow_task_codes[["sensitivity"]])
 )
+validation_runs_by_stage <- stats::setNames(lapply(flow_validation_tasks, function(stage) {
+  validation_runs[validation_runs$VALIDATION_STAGE == stage, , drop = FALSE]
+}), flow_validation_tasks)
+selftest_runs <- validation_runs_by_stage[["selftest"]]
+jitter_runs <- validation_runs_by_stage[["jitter"]]
+retro_runs <- validation_runs_by_stage[["retro"]]
+hessian_runs <- validation_runs_by_stage[["hessian"]]
+likprof_runs <- validation_runs_by_stage[["likprof"]]
+diagnostics_runs <- validation_runs
 
 flow_plot_job_key <- flow_env_any(c("FLOW_PLOT_JOB_KEY", "TUNA_FLOW_PLOT_JOB_KEY"), if (isTRUE(flow_is_full_run)) "plot-report-figures" else "plot-key-quantities-smoke")
 flow_report_job_key <- flow_env_any(c("FLOW_REPORT_JOB_KEY", "TUNA_FLOW_REPORT_JOB_KEY"), if (isTRUE(flow_is_full_run)) "report-assessment" else "report-key-quantities-smoke")
@@ -594,8 +624,8 @@ plot_runs <- data.frame(
   CHANGE_SUMMARY = "Builds the mfclshiny report-ready figure bundle from selected model and selftest outputs.",
   JOB_TITLE = "Plot: report figures",
   JOB_DESCRIPTION = "Builds mfclshiny report figures, tables, and HTML review.",
-  INPUT_TASK = flow_task_codes[["diagnostics"]],
-  INPUT_KEY = paste(diagnostics_runs$JOB_KEY, collapse = ","),
+  INPUT_TASK = paste(validation_runs$VALIDATION_TASK_CODE, collapse = ","),
+  INPUT_KEY = paste(validation_runs$JOB_KEY, collapse = ","),
   PLOT_TITLE = flow_plot_title,
   PLOT_BACKEND = "mfclshiny",
   MFCLSHINY_SCRIPT = "hooks/depletion_smoke.R",
@@ -658,7 +688,7 @@ runtime_package_specs <- function(backend, stage = "", plot_backend = "", mfclsh
   if (identical(stage, "plot") || identical(plot_backend, "mfclshiny") || nzchar(mfclshiny_script)) {
     return(specs[["mfclshiny"]])
   }
-  if (identical(stage, "diagnostics") || identical(backend, "diagnostics_smoke") || identical(backend, "selftest")) {
+  if (identical(stage, "selftest") || identical(backend, "diagnostics_smoke") || identical(backend, "selftest")) {
     return("none")
   }
   if (identical(backend, "mfclrtmb")) {
@@ -834,8 +864,20 @@ input_selector_for_row <- function(row) {
   if (!nzchar(task) || !nzchar(key)) {
     return(list())
   }
+  tasks <- trimws(unlist(strsplit(task, ",")))
+  tasks <- tasks[nzchar(tasks)]
   keys <- trimws(unlist(strsplit(key, ",")))
   keys <- keys[nzchar(keys)]
+  if (length(tasks) > 1L) {
+    if (length(tasks) != length(keys)) {
+      stop("When INPUT_TASK lists multiple task codes, INPUT_KEY must list the same number of keys.", call. = FALSE)
+    }
+    grouped <- split(keys, tasks)
+    return(lapply(names(grouped), function(task_code) {
+      KflowKit::kflow_input_keys(task_code, grouped[[task_code]])
+    }))
+  }
+  task <- tasks[[1]]
   if (length(keys) > 1) {
     return(list(KflowKit::kflow_input_keys(task, keys)))
   }
@@ -969,11 +1011,11 @@ launch_rows_batched <- function(task_code,
 
 register_tasks <- function(...) {
   flow_require_kflowkit()
-  task_paths <- c("base", "sensitivity", "diagnostics", "plot", "report")
+  task_paths <- c("base", "sensitivity", flow_validation_tasks, "plot", "report")
   KflowKit::kflow_register_workflow(
     paths = task_paths,
     codes = unname(flow_task_codes[task_paths]),
-    names = unname(flow_task_codes[task_paths]),
+    names = unname(flow_task_labels[task_paths]),
     repo = flow_kflow_repo,
     branch = flow_kflow_branch,
     target_folders = task_paths,
@@ -991,11 +1033,47 @@ launch_sensitivity <- function(rows = sensitivity_models, ...) {
   launch_rows(flow_task_codes[["sensitivity"]], "sensitivity", rows, tags = list(stage = "sensitivity"), ...)
 }
 
-launch_diagnostics <- function(rows = diagnostics_runs, ...) {
-  launch_rows(flow_task_codes[["diagnostics"]], "diagnostics", rows, tags = list(stage = "selftest"), ...)
+launch_selftest <- function(rows = selftest_runs, ...) {
+  launch_rows(flow_task_codes[["selftest"]], "selftest", rows, tags = list(stage = "selftest"), ...)
 }
 
-launch_selftest <- launch_diagnostics
+launch_jitter <- function(rows = jitter_runs, ...) {
+  launch_rows(flow_task_codes[["jitter"]], "jitter", rows, tags = list(stage = "jitter"), ...)
+}
+
+launch_retro <- function(rows = retro_runs, ...) {
+  launch_rows(flow_task_codes[["retro"]], "retro", rows, tags = list(stage = "retro"), ...)
+}
+
+launch_hessian <- function(rows = hessian_runs, ...) {
+  launch_rows(flow_task_codes[["hessian"]], "hessian", rows, tags = list(stage = "hessian"), ...)
+}
+
+launch_likprof <- function(rows = likprof_runs, ...) {
+  launch_rows(flow_task_codes[["likprof"]], "likprof", rows, tags = list(stage = "likprof"), ...)
+}
+
+launch_validation <- function(rows = validation_runs, batch_size = Inf, limit = Inf, ...) {
+  rows <- as.data.frame(rows, stringsAsFactors = FALSE)
+  out <- list()
+  for (stage in flow_validation_tasks) {
+    stage_rows <- rows[rows$VALIDATION_STAGE == stage, , drop = FALSE]
+    if (nrow(stage_rows)) {
+      out[[stage]] <- launch_rows_batched(
+        flow_task_codes[[stage]],
+        stage,
+        stage_rows,
+        batch_size = batch_size,
+        limit = limit,
+        tags = list(stage = stage),
+        ...
+      )
+    }
+  }
+  out
+}
+
+launch_diagnostics <- launch_validation
 
 launch_plot <- function(rows = plot_runs, ...) {
   launch_rows(flow_task_codes[["plot"]], "plot", rows, tags = list(stage = "plot"), ...)
@@ -1005,15 +1083,16 @@ launch_report <- function(rows = report_runs, ...) {
   launch_rows(flow_task_codes[["report"]], "report", rows, tags = list(stage = "report"), ...)
 }
 
-diagnostics_from <- function(input_task,
-                             input_key,
-                             job_key,
-                             token = job_key,
-                             title = paste("Diagnostics:", input_key),
-                             make_targets = "jitter_smoke",
-                             base_dir,
-                             model_dir,
-                             jitter_seed = 40) {
+selftest_from <- function(input_task,
+                          input_key,
+                          job_key,
+                          token = job_key,
+                          title = paste("Selftest:", input_key),
+                          make_targets = "selftest",
+                          base_dir,
+                          model_dir,
+                          selftest_mode = "jitter",
+                          selftest_seed = 40) {
   data.frame(
     RUN_LABEL = job_key,
     JOB_KEY = job_key,
@@ -1022,21 +1101,26 @@ diagnostics_from <- function(input_task,
     MODEL_NAME = title,
     BASE_MODEL_KEY = if (identical(input_task, flow_task_codes[["base"]])) input_key else "",
     CHANGE_TOKEN = token,
-    CHANGE_GROUP = "diagnostics",
-    CHANGE_SUMMARY = paste("Runs diagnostics from", input_task, input_key),
+    CHANGE_GROUP = "selftest",
+    CHANGE_SUMMARY = paste("Runs a model selftest from", input_task, input_key),
     JOB_TITLE = title,
-    JOB_DESCRIPTION = paste("Runs diagnostics from", input_task, input_key),
+    JOB_DESCRIPTION = paste("Runs a model selftest from", input_task, input_key),
     INPUT_TASK = input_task,
     INPUT_KEY = input_key,
     MAKE_TARGETS = make_targets,
     BASE_DIR = base_dir,
     MODEL_DIR = model_dir,
-    JITTER_SEED = jitter_seed,
-    JITTER_SMOKE_ONLY = "1",
-    COLLECT_PATHS = paste0(model_dir, "/jitter,", base_dir),
+    MFCL_BACKEND = "selftest",
+    SELFTEST_MODE = selftest_mode,
+    SELFTEST_SEED = selftest_seed,
+    JITTER_SEED = selftest_seed,
+    JITTER_SMOKE_ONLY = "0",
+    COLLECT_PATHS = paste(model_dir, base_dir, sep = ","),
     stringsAsFactors = FALSE
   )
 }
+
+diagnostics_from <- selftest_from
 
 plot_from <- function(input_task, input_key, job_key, title = paste("Plot:", input_key)) {
   data.frame(
@@ -1099,20 +1183,28 @@ launch_example_flow <- function(...) {
   list(
     base = launch_base(...),
     sensitivity = launch_sensitivity(...),
-    diagnostics = launch_diagnostics(...),
+    selftest = launch_selftest(...),
+    jitter = launch_jitter(...),
+    retro = launch_retro(...),
+    hessian = launch_hessian(...),
+    likprof = launch_likprof(...),
     plot = launch_plot(...),
     report = launch_report(...)
   )
 }
 
 launch_stage <- function(stage, rows, batch_size = Inf, limit = Inf, ...) {
-  stage <- match.arg(stage, c("base", "sensitivity", "diagnostics", "selftest", "plot", "report"))
+  stage <- match.arg(stage, c("base", "sensitivity", "diagnostics", flow_validation_tasks, "plot", "report"))
   switch(
     stage,
     base = launch_rows_batched(flow_task_codes[["base"]], "base", rows, batch_size = batch_size, limit = limit, tags = list(stage = "base"), ...),
     sensitivity = launch_rows_batched(flow_task_codes[["sensitivity"]], "sensitivity", rows, batch_size = batch_size, limit = limit, tags = list(stage = "sensitivity"), ...),
-    diagnostics = launch_rows_batched(flow_task_codes[["diagnostics"]], "diagnostics", rows, batch_size = batch_size, limit = limit, tags = list(stage = "selftest"), ...),
-    selftest = launch_rows_batched(flow_task_codes[["diagnostics"]], "diagnostics", rows, batch_size = batch_size, limit = limit, tags = list(stage = "selftest"), ...),
+    diagnostics = launch_validation(rows, batch_size = batch_size, limit = limit, ...),
+    selftest = launch_rows_batched(flow_task_codes[["selftest"]], "selftest", rows, batch_size = batch_size, limit = limit, tags = list(stage = "selftest"), ...),
+    jitter = launch_rows_batched(flow_task_codes[["jitter"]], "jitter", rows, batch_size = batch_size, limit = limit, tags = list(stage = "jitter"), ...),
+    retro = launch_rows_batched(flow_task_codes[["retro"]], "retro", rows, batch_size = batch_size, limit = limit, tags = list(stage = "retro"), ...),
+    hessian = launch_rows_batched(flow_task_codes[["hessian"]], "hessian", rows, batch_size = batch_size, limit = limit, tags = list(stage = "hessian"), ...),
+    likprof = launch_rows_batched(flow_task_codes[["likprof"]], "likprof", rows, batch_size = batch_size, limit = limit, tags = list(stage = "likprof"), ...),
     plot = launch_rows_batched(flow_task_codes[["plot"]], "plot", rows, batch_size = batch_size, limit = limit, tags = list(stage = "plot"), ...),
     report = launch_rows_batched(flow_task_codes[["report"]], "report", rows, batch_size = batch_size, limit = limit, tags = list(stage = "report"), ...)
   )

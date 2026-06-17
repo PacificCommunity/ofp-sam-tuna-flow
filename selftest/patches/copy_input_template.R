@@ -1,7 +1,7 @@
-# Template patch script for diagnostics-specific input edits.
+# Template patch script for selftest-specific input edits.
 #
-# Most diagnostics should not need this, but it is here for cases where a
-# diagnostic needs a special input preparation step.
+# Most selftests should not need this, but it is here for cases where a model
+# validation check needs a special input preparation step.
 
 input_dir <- Sys.getenv("KFLOW_PATCH_INPUT_DIR")
 output_dir <- Sys.getenv("KFLOW_PATCH_OUTPUT_DIR")
@@ -18,10 +18,9 @@ if (!identical(normalizePath(input_dir, mustWork = TRUE), normalizePath(output_d
 
 writeLines(
   c(
-    "Diagnostics patch template completed.",
+    "Selftest patch template completed.",
     paste("Input:", input_dir),
     paste("Output:", output_dir)
   ),
   file.path(Sys.getenv("KFLOW_PATCH_OUT_DIR", "outputs"), "patch-template-note.txt")
 )
-

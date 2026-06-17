@@ -15,11 +15,12 @@ The included BET 2026 starter config points to:
 - `FLOW_REPORT_REPO=PacificCommunity/ofp-sam-bet2026-report`
 - `FLOW_REPORT_PATH=bet-2026-report`
 - `FLOW_MFCL_PROGRAM=/home/mfcl/mfclo64` from the Docker image
-- `FLOW_DOCKER_IMAGE=ghcr.io/pacificcommunity/tuna-flow:latest`
+- `FLOW_DOCKER_IMAGE=ghcr.io/pacificcommunity/tuna-flow:v1.5`
 
 The starter flow runs one base model, several explicit sensitivity recipes
-(`FixM`, `FixVB`, `Sel4`, `IndexCvHalf`), jitter-style diagnostics, a key
-derived quantities figure, and a Quarto report. The generic report template
+(`FixM`, `FixVB`, `Sel4`, `IndexCvHalf`), independent model validation tasks
+(`selftest`, `jitter`, `retro`, `hessian`, `likprof`), report-ready figures,
+and a Quarto report. The generic report template
 lives in `PacificCommunity/ofp-sam-tuna-report`; the BET 2026 report draft
 lives in `PacificCommunity/ofp-sam-bet2026-report`.
 

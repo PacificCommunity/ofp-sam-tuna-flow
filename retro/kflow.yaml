@@ -1,5 +1,5 @@
-name: tuna-flow-diagnostics
-description: Run one tuna assessment diagnostics job from either a base job or a sensitivity job.
+name: tuna-flow-retro
+description: Run one tuna assessment retrospective validation from either a base job or a sensitivity job.
 command: bash run.sh
 docker_image: ghcr.io/pacificcommunity/tuna-flow:latest
 resources:
@@ -74,10 +74,17 @@ job_config:
     - PATCH_INPUT_DIR
     - PATCH_OUTPUT_DIR
     - PATCH_ARGS
+    - SELFTEST_MODE
+    - SELFTEST_SEED
+    - VALIDATION_STAGE
+    - VALIDATION_TASK_CODE
+    - SELFTEST_SEED_GLOB
+    - SELFTEST_SEED_COPY_TO
     - JITTER_SEED
     - JITTER_CV
     - JITTER_SMOKE_ONLY
     - RETRO_PEEL
+    - LIKPROF_TARGET
     - N_MIXING_PERIODS
     - HESSIAN_PART
     - NSPLIT
