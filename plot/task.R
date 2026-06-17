@@ -72,22 +72,15 @@ report_figure <- if (file.exists(file.path(ctx$out_dir, "report-figures", "key-q
   ""
 }
 report_figure_dir <- file.path(ctx$out_dir, "report-figures")
-report_figures <- if (dir.exists(report_figure_dir)) {
-  file.path(
+report_artifacts <- if (dir.exists(report_figure_dir)) {
+  sort(unique(file.path(
     "report-figures",
-    list.files(report_figure_dir, pattern = "[.]png$", recursive = TRUE, full.names = FALSE, ignore.case = TRUE)
-  )
+    list.files(report_figure_dir, recursive = TRUE, full.names = FALSE, ignore.case = TRUE)
+  )))
 } else {
   character()
 }
-report_metadata <- if (dir.exists(report_figure_dir)) {
-  file.path(
-    "report-figures",
-    list.files(report_figure_dir, pattern = "[.]csv$", recursive = TRUE, full.names = FALSE, ignore.case = TRUE)
-  )
-} else {
-  character()
-}
+report_figures <- report_artifacts[grepl("[.]png$", report_artifacts, ignore.case = TRUE)]
 figure_priority <- function(path) {
   if (grepl("key-quantities-smoke[.]png$", path, ignore.case = TRUE)) return(1L)
   if (grepl("depletion-smoke[.]png$", path, ignore.case = TRUE)) return(2L)
@@ -115,6 +108,7 @@ plot_summary <- data.frame(
   plot_file = plot_file,
   report_figure = report_figure,
   report_figures = paste(report_figures, collapse = ","),
+  report_files = paste(report_artifacts, collapse = ","),
   stringsAsFactors = FALSE
 )
 utils::write.csv(plot_summary, file.path(ctx$out_dir, "plot-summary.csv"), row.names = FALSE)
@@ -122,9 +116,8 @@ writeLines(capture.output(print(plot_summary)), file.path(ctx$out_dir, "plot-sum
 kflow_write_registry(ctx$out_dir, "plot")
 kflow_write_summary(ctx$out_dir, "plot")
 plot_keep <- c("plot-summary.csv", "model-registry.csv")
-plot_keep <- c(plot_keep, if (length(report_figures)) report_figures else if (nzchar(plot_file)) plot_file else character())
-plot_keep <- c(plot_keep, report_metadata)
+plot_keep <- c(plot_keep, if (length(report_artifacts)) report_artifacts else if (nzchar(plot_file)) plot_file else character())
 kflow_compact_outputs(
   ctx$out_dir,
-  keep = plot_keep
+  keep = unique(plot_keep)
 )
