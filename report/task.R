@@ -220,6 +220,43 @@ if (length(figure_metadata_files)) {
     file.copy(metadata_file, file.path(plot_dir, target), overwrite = TRUE)
   }
 }
+figure_metadata <- kflow_read_csv_union(figure_metadata_files)
+figure_metadata_for <- function(copied_path, source_rel) {
+  if (is.null(figure_metadata) || !nrow(figure_metadata)) {
+    return(data.frame())
+  }
+  copied_base <- basename(copied_path)
+  source_base <- basename(source_rel)
+  candidates <- rep(FALSE, nrow(figure_metadata))
+  for (name in intersect(c("file", "relative_path"), names(figure_metadata))) {
+    values <- basename(as.character(figure_metadata[[name]]))
+    candidates <- candidates | values %in% c(copied_base, source_base)
+  }
+  rows <- figure_metadata[candidates, , drop = FALSE]
+  if (!nrow(rows)) {
+    return(data.frame())
+  }
+  ext <- tolower(tools::file_ext(copied_base))
+  if ("format" %in% names(rows)) {
+    format_hit <- tolower(as.character(rows$format)) == ext
+    if (any(format_hit, na.rm = TRUE)) {
+      rows <- rows[format_hit, , drop = FALSE]
+    }
+  }
+  rows[1, , drop = FALSE]
+}
+markdown_caption <- function(value) {
+  value <- trimws(as.character(value %||% ""))
+  value <- gsub("[\r\n]+", " ", value)
+  gsub("([][\\\\])", "\\\\\\1", value)
+}
+metadata_value <- function(row, name, default = "") {
+  if (is.null(row) || !nrow(row) || !name %in% names(row)) {
+    return(default)
+  }
+  value <- as.character(row[[name]][[1]])
+  if (is.na(value) || !nzchar(value)) default else value
+}
 
 copy_figure_tree <- kflow_bool(
   "REPORT_COPY_FIGURE_TREE",
@@ -289,10 +326,13 @@ if (kflow_bool("REPORT_REWRITE_FIGURES", rewrite_figures_default)) {
       "Pipeline-generated figures from upstream plot jobs.",
       "",
       unlist(lapply(seq_along(copied), function(index) {
+        meta <- figure_metadata_for(copied[[index]], copied_sources[[index]])
+        label <- metadata_value(meta, "label", figure_label(copied_sources[[index]]))
+        caption <- metadata_value(meta, "caption", label)
         c(
-          sprintf("## %s", figure_label(copied_sources[[index]])),
+          sprintf("## %s", label),
           "",
-          sprintf("![](%s){#fig-pipeline-%03d fig-align=\"center\" width=100%%}", copied[[index]], index),
+          sprintf("![%s](%s){#fig-pipeline-%03d fig-align=\"center\" width=100%%}", markdown_caption(caption), copied[[index]], index),
           ""
         )
       }), use.names = FALSE)

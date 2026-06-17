@@ -79,7 +79,7 @@ mfclshiny_figure_dir <- report_figure_dir
 if (isTRUE(package_status$available[package_status$package == "mfclshiny"]) &&
     "build_report_figures" %in% getNamespaceExports("mfclshiny")) {
   mfclshiny_status <- tryCatch({
-    result <- mfclshiny::build_report_figures(
+    report_args <- list(
       data = depletion,
       output_dir = mfclshiny_figure_dir,
       title = plot_title,
@@ -93,6 +93,10 @@ if (isTRUE(package_status$available[package_status$package == "mfclshiny"]) &&
       species_label = Sys.getenv("FLOW_SPECIES_LABEL", "selected stock"),
       assessment_year = Sys.getenv("FLOW_ASSESSMENT_YEAR", "")
     )
+    if ("plot_style" %in% names(formals(mfclshiny::build_report_figures))) {
+      report_args$plot_style <- "shiny_stock"
+    }
+    result <- do.call(mfclshiny::build_report_figures, report_args)
     svg_src <- file.path(mfclshiny_figure_dir, "key-quantities-smoke.svg")
     png_src <- file.path(mfclshiny_figure_dir, "key-quantities-smoke.png")
     if (file.exists(svg_src)) {
