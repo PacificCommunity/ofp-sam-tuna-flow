@@ -154,7 +154,8 @@ if (!requireNamespace("remotes", quietly = TRUE)) {
   utils::install.packages("remotes", lib = lib, dependencies = TRUE, repos = getOption("repos"))
 }
 token <- ""
-if (truthy(Sys.getenv("KFLOW_FORWARD_GITHUB_TOKEN_TO_RUNTIME", "true"))) {
+if (truthy(Sys.getenv("KFLOW_FORWARD_GITHUB_TOKEN_TO_RUNTIME", "false")) ||
+    truthy(Sys.getenv("KFLOW_RUNTIME_GITHUB_AUTH", "false"))) {
   for (name in c("GITHUB_PAT", "GIT_PAT", "GH_TOKEN", "KFLOW_GITHUB_TOKEN", "KFLOW_PERSONAL_TOKEN")) {
     value <- Sys.getenv(name, "")
     if (nzchar(value)) {
