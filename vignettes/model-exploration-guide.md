@@ -40,7 +40,7 @@ Sys.setenv(
   FLOW_SOURCE_REPO = "PacificCommunity/ofp-sam-bet2026-inputs",
   FLOW_SOURCE_REF = "main",
   FLOW_BASE_INPUT_DIR = "mfcl/inputs/2023_4region_1007",
-  FLOW_REPORT_REPO = "PacificCommunity/ofp-sam-bet2026-report",
+  FLOW_REPORT_REPO = "PacificCommunity/ofp-sam-bet-2026-report",
   FLOW_REPORT_REF = "main",
   FLOW_REPORT_PATH = "bet-2026-report",
   FLOW_REPORT_MAIN = "assessment-report.qmd",

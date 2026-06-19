@@ -160,6 +160,7 @@ flow_report_repo <- flow_env_any(
 flow_report_ref <- flow_env_any(c("FLOW_REPORT_REF", "TUNA_FLOW_REPORT_REF"), "main")
 flow_report_path <- flow_env_any(c("FLOW_REPORT_PATH", "TUNA_FLOW_REPORT_PATH"), flow_report_folder)
 flow_report_main <- flow_env_any(c("FLOW_REPORT_MAIN", "TUNA_FLOW_REPORT_MAIN"), "assessment-report.qmd")
+flow_mfclshiny_ref <- flow_env_any(c("FLOW_MFCLSHINY_REF", "TUNA_FLOW_MFCLSHINY_REF"), "main")
 flow_docker_image <- flow_env_any(
   c("FLOW_DOCKER_IMAGE", "TUNA_FLOW_DOCKER_IMAGE"),
   "ghcr.io/pacificcommunity/tuna-flow:v1.5"
@@ -676,7 +677,7 @@ runtime_package_specs <- function(backend, stage = "", plot_backend = "", mfclsh
   specs <- c(
     mfclrtmb = "mfclrtmb=PacificCommunity/ofp-sam-mfclrtmb@main",
     mfclkit = "mfclkit=PacificCommunity/ofp-sam-mfclkit@main",
-    mfclshiny = "mfclshiny=PacificCommunity/mfclshiny@main"
+    mfclshiny = paste0("mfclshiny=PacificCommunity/mfclshiny@", flow_mfclshiny_ref)
   )
   backend <- tolower(as.character(backend %||% "mfcl_exe"))
   stage <- tolower(as.character(stage %||% ""))
