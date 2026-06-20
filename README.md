@@ -6,7 +6,7 @@ The repo is generic. It does not store MFCL input files or assessment report
 sources. Kflow job config supplies the input bundle, report repository, and
 species/year metadata through environment variables such as
 `FLOW_SOURCE_REPO`, `FLOW_BASE_INPUT_DIR`, `FLOW_OUTPUTS_REPO`,
-`FLOW_CURATION_REPO`, and `FLOW_DRAFT_REPO`.
+`FLOW_CURATION_REPO`, and `FLOW_REPORT_REPO`.
 
 The included BET 2026 starter config points to:
 
@@ -14,26 +14,25 @@ The included BET 2026 starter config points to:
 - `FLOW_BASE_INPUT_DIR=mfcl/inputs/2023_4region_1007`
 - `FLOW_OUTPUTS_REPO=PacificCommunity/ofp-sam-bet-2026-outputs`
 - `FLOW_CURATION_REPO=PacificCommunity/ofp-sam-bet-2026-curation`
-- `FLOW_DRAFT_REPO=PacificCommunity/ofp-sam-bet-2026-draft`
-- `FLOW_DRAFT_PATH=bet-2026-report`
+- `FLOW_REPORT_REPO=PacificCommunity/ofp-sam-bet-2026-report`
+- `FLOW_REPORT_PATH=bet-2026-report`
 - `FLOW_MFCL_PROGRAM=/home/mfcl/mfclo64` from the Docker image
 - `FLOW_DOCKER_IMAGE=ghcr.io/pacificcommunity/tuna-flow:v1.6`
 
 The starter flow runs one base model, several explicit sensitivity recipes
 (`FixM`, `FixVB`, `Sel4`, `IndexCvHalf`), independent model validation tasks
 (`selftest`, `jitter`, `retro`, `hessian`, `likprof`), report-ready figures,
-curation, and a Quarto draft. The BET 2026 report workflow is intentionally
+curation, and a Quarto report. The BET 2026 report workflow is intentionally
 split into four assessment-specific repositories:
 
 ```text
-stepwise -> outputs -> curation -> draft
+upstream model/output jobs -> outputs -> curation -> report
 ```
 
 `outputs` makes the full mfclshiny figure/table bundle. `curation` chooses the
-figures and tables, sets order/section/captions, and writes draft-ready QMD.
-`draft` renders the automatic assessment draft. Later, a human-owned final
-`ofp-sam-bet-2026-report` repository can replace `draft` without changing the
-curation contract.
+figures and tables, sets order/section/captions, and writes report-ready QMD.
+`report` renders the assessment report and records the upstream outputs job id,
+curation job id, and curation/report repository commits in provenance artifacts.
 
 Start here:
 

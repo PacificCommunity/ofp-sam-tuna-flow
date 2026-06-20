@@ -8,8 +8,8 @@ this file when you need to remember how the pieces fit together.
 Kflow runs dependency-aware Docker jobs from R:
 
 ```text
-base -> sensitivity -> diagnostics -> outputs -> curation -> draft
-base ----------------> diagnostics -> outputs -> curation -> draft
+base -> sensitivity -> diagnostics -> outputs -> curation -> report
+base ----------------> diagnostics -> outputs -> curation -> report
 ```
 
 The local R session registers and launches jobs. The actual MFCL work runs
@@ -39,7 +39,7 @@ Sys.setenv(
   FLOW_ASSESSMENT_YEAR = "2026",
   FLOW_OUTPUTS_TASK_CODE = "ofp-sam-bet-2026-outputs",
   FLOW_CURATION_TASK_CODE = "ofp-sam-bet-2026-curation",
-  FLOW_DRAFT_TASK_CODE = "ofp-sam-bet-2026-draft",
+  FLOW_REPORT_TASK_CODE = "ofp-sam-bet-2026-report",
   FLOW_SOURCE_REPO = "PacificCommunity/ofp-sam-bet2026-inputs",
   FLOW_SOURCE_REF = "main",
   FLOW_BASE_INPUT_DIR = "mfcl/inputs/2023_4region_1007",
@@ -47,10 +47,10 @@ Sys.setenv(
   FLOW_OUTPUTS_REF = "main",
   FLOW_CURATION_REPO = "PacificCommunity/ofp-sam-bet-2026-curation",
   FLOW_CURATION_REF = "main",
-  FLOW_DRAFT_REPO = "PacificCommunity/ofp-sam-bet-2026-draft",
-  FLOW_DRAFT_REF = "main",
-  FLOW_DRAFT_PATH = "bet-2026-report",
-  FLOW_DRAFT_MAIN = "assessment-report.qmd",
+  FLOW_REPORT_REPO = "PacificCommunity/ofp-sam-bet-2026-report",
+  FLOW_REPORT_REF = "main",
+  FLOW_REPORT_PATH = "bet-2026-report",
+  FLOW_REPORT_MAIN = "assessment-report.qmd",
   FLOW_MFCL_PROGRAM = "/home/mfcl/mfclo64"
 )
 
@@ -62,11 +62,12 @@ sessions that prefer an env file. With that preset, task codes are generated as
 `bet-2026-base`, `bet-2026-sensitivity`, and diagnostics tasks from the generic
 tuna-flow templates. The assessment-specific report stages are explicitly named
 `ofp-sam-bet-2026-outputs`, `ofp-sam-bet-2026-curation`, and
-`ofp-sam-bet-2026-draft` so their Kflow URLs match the standalone repositories.
-The old helper names `plot` and `report` remain aliases for `outputs` and
-`draft` so older notes keep working, but new work should use the clearer stage
-names. For YFT, set `FLOW_SPECIES = "YFT"` and choose the YFT input directory
-and assessment-specific outputs, curation, and draft repositories; the same
+`ofp-sam-bet-2026-report` so their Kflow URLs match the standalone repositories.
+The old helper name `plot` remains an alias for `outputs` so older notes keep
+working, but new work should use the clearer stage names. `launch_draft()` is
+also kept as a compatibility alias for `launch_report()`. For YFT, set
+`FLOW_SPECIES = "YFT"` and choose the YFT input directory and
+assessment-specific outputs, curation, and report repositories; the same
 tables and dependencies still work.
 
 For local dry runs before the input bundle is pushed, set `SOURCE_PATH` or
@@ -88,7 +89,7 @@ The starter objects are:
   mfclshiny figure/table bundle.
 - `curation_runs`: jobs that select/order/caption report items and write QMD
   sections.
-- `draft_runs`: Quarto draft render jobs.
+- `report_runs`: Quarto report render jobs.
 
 For many models, add rows to recipe tables rather than copying long Kflow rows.
 
@@ -201,7 +202,7 @@ diagnostics_runs <- rbind(
 )
 ```
 
-## Outputs, curation, and draft
+## Outputs, curation, and report
 
 `outputs_runs$INPUT_KEY` can contain one diagnostics key or a comma-separated
 list. That lets one outputs job collect many models:
@@ -223,8 +224,8 @@ The curation job reads that bundle and writes:
 - `curation/curation-board.html`
 - `curation/report-selection.csv`
 - `curation/report-selection.yml`
-- `draft/sections/Figures.qmd`
-- `draft/sections/Tables.qmd`
+- `report/sections/Figures.qmd`
+- `report/sections/Tables.qmd`
 - selected files under `figures/` and `tables/`
 
 Most runs can use the automatic curation. If you need to change the report
@@ -232,30 +233,30 @@ contents, open `curation-board.html`, edit placement/order/section/title/caption
 fields, export YAML, paste it into `catalog/curation.yml` in
 `ofp-sam-bet-2026-curation`, and rerun curation.
 
-The draft job consumes the curated QMD sections, clones `FLOW_DRAFT_REPO`, enters
-`FLOW_DRAFT_PATH`, renders `FLOW_DRAFT_MAIN`, and writes:
+The report job consumes the curated QMD sections, clones `FLOW_REPORT_REPO`,
+enters `FLOW_REPORT_PATH`, renders `FLOW_REPORT_MAIN`, and writes:
 
-- `${FLOW_DRAFT_FILE_STEM}.pdf` or `.html`, depending on `REPORT_RENDER_FORMAT`
+- `${FLOW_REPORT_FILE_STEM}.pdf` or `.html`, depending on `REPORT_RENDER_FORMAT`
 - the curated figures and tables used by the report
 - `indices/report-output-index.csv`
 
-That lets you rerun only the draft stage from an existing curation job:
+That lets you rerun only the report stage from an existing curation job:
 
 ```r
-launch_draft(report_from(flow_task_codes[["curation"]], "curation-report-assets", "draft-rerun"))
+launch_report(report_from(flow_task_codes[["curation"]], "curation-report-assets", "report-rerun"))
 ```
 
-If captions or order are edited directly in the generated draft QMD, sync those
+If captions or order are edited directly in the generated report QMD, sync those
 manual edits back into curation before the next automated run:
 
 ```sh
 cd ../ofp-sam-bet-2026-curation
-Rscript R/sync_from_report.R /path/to/draft-or-report/sections catalog/curation.yml
+Rscript R/sync_from_report.R /path/to/report/sections catalog/curation.yml
 ```
 
-That is the round-trip contract. Later, when the hand-edited final
-`ofp-sam-bet-2026-report` repository exists, the workflow can point the last
-stage at that repository instead of `ofp-sam-bet-2026-draft`.
+That is the round-trip contract. Kflow artifacts and provenance files track the
+outputs job id, curation job id, and curation/report repository commits without
+using git submodules.
 
 ## Register and launch
 
@@ -268,7 +269,7 @@ launch_sensitivity()
 launch_diagnostics()
 launch_outputs()
 launch_curation()
-launch_draft()
+launch_report()
 ```
 
 For a quick plan preview:
