@@ -37,6 +37,9 @@ Sys.setenv(
   FLOW_SPECIES = "BET",
   FLOW_SPECIES_LABEL = "Bigeye tuna",
   FLOW_ASSESSMENT_YEAR = "2026",
+  FLOW_OUTPUTS_TASK_CODE = "ofp-sam-bet-2026-outputs",
+  FLOW_CURATION_TASK_CODE = "ofp-sam-bet-2026-curation",
+  FLOW_DRAFT_TASK_CODE = "ofp-sam-bet-2026-draft",
   FLOW_SOURCE_REPO = "PacificCommunity/ofp-sam-bet2026-inputs",
   FLOW_SOURCE_REF = "main",
   FLOW_BASE_INPUT_DIR = "mfcl/inputs/2023_4region_1007",
@@ -56,14 +59,15 @@ source("R/workflow.R")
 
 The same settings are available in `configs/bet-2026.env` for scripts or shell
 sessions that prefer an env file. With that preset, task codes are generated as
-`bet-2026-base`,
-`bet-2026-sensitivity`, `bet-2026-diagnostics`, `bet-2026-outputs`,
-`bet-2026-curation`, and `bet-2026-draft`. The old helper names `plot` and
-`report` remain aliases for `outputs` and `draft` so older notes keep working,
-but new work should use the clearer stage names. For YFT, set
-`FLOW_SPECIES = "YFT"` and choose the YFT input directory and assessment-specific
-outputs, curation, and draft repositories; the same tables and dependencies
-still work.
+`bet-2026-base`, `bet-2026-sensitivity`, and diagnostics tasks from the generic
+tuna-flow templates. The assessment-specific report stages are explicitly named
+`ofp-sam-bet-2026-outputs`, `ofp-sam-bet-2026-curation`, and
+`ofp-sam-bet-2026-draft` so their Kflow URLs match the standalone repositories.
+The old helper names `plot` and `report` remain aliases for `outputs` and
+`draft` so older notes keep working, but new work should use the clearer stage
+names. For YFT, set `FLOW_SPECIES = "YFT"` and choose the YFT input directory
+and assessment-specific outputs, curation, and draft repositories; the same
+tables and dependencies still work.
 
 For local dry runs before the input bundle is pushed, set `SOURCE_PATH` or
 `FLOW_SOURCE_PATH` to a local input-bundle checkout. Do not put a local path into
